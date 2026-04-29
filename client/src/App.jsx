@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { clearSession, getStoredUser } from "./auth/session";
-import { LoginPage } from "./components/LoginPage";
+import { LoginPage } from "./pages/LoginPage";
 
-const AdminDashboard = lazy(() => import("./components/AdminDashboard").then((module) => ({ default: module.AdminDashboard })));
-const ParentDashboard = lazy(() => import("./components/ParentDashboard").then((module) => ({ default: module.ParentDashboard })));
-const StudentDashboard = lazy(() => import("./components/StudentDashboard").then((module) => ({ default: module.StudentDashboard })));
-const TeacherDashboard = lazy(() => import("./components/TeacherDashboard").then((module) => ({ default: module.TeacherDashboard })));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard").then((module) => ({ default: module.AdminDashboard })));
+const ParentDashboard = lazy(() => import("./pages/ParentDashboard").then((module) => ({ default: module.ParentDashboard })));
+const StudentDashboard = lazy(() => import("./pages/StudentDashboard").then((module) => ({ default: module.StudentDashboard })));
+const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard").then((module) => ({ default: module.TeacherDashboard })));
 
 export function App() {
   const [user, setUser] = useState(() => getStoredUser());

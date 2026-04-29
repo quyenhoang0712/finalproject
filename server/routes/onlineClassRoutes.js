@@ -43,6 +43,16 @@ const isClassTime = (schedule, now = new Date()) => {
   return current >= start && current <= end;
 };
 
+const endStaleLiveSession = async (session) => {
+  if (!session || session.status !== "live") return session;
+  session.status = "ended";
+  session.endedAt = new Date();
+  session.participants = [];
+  session.signals = [];
+  await session.save();
+  return session;
+};
+
 const canAccessSchedule = async (schedule, user) => {
   const classItem = schedule.classId;
   const classId = classItem?._id || schedule.classId;
@@ -117,15 +127,26 @@ router.get("/", authMiddleware, roleMiddleware("teacher", "student", "parent"), 
     const bySchedule = new Map(sessions.map((item) => [String(item.scheduleId), item]));
     const now = new Date();
 
+    await Promise.all(
+      schedules.map((schedule) => {
+        const session = bySchedule.get(String(schedule._id));
+        return session?.status === "live" && !isClassTime(schedule, now)
+          ? endStaleLiveSession(session)
+          : null;
+      })
+    );
+
     res.status(200).json(
       schedules.map((schedule) => {
         const session = bySchedule.get(String(schedule._id));
+        const isAvailable = isClassTime(schedule, now);
+        const live = session?.status === "live" && isAvailable;
         return {
           schedule,
           session: session || null,
-          canOpen: req.user.role === "teacher" && isClassTime(schedule, now),
-          canJoin: Boolean(session && session.status === "live" && isClassTime(schedule, now)),
-          isClassTime: isClassTime(schedule, now),
+          canOpen: req.user.role === "teacher" && isAvailable,
+          canJoin: Boolean(live),
+          isClassTime: isAvailable,
         };
       })
     );
@@ -188,7 +209,10 @@ router.post("/:sessionId/join", authMiddleware, roleMiddleware("teacher", "stude
 
     const session = await OnlineClassSession.findById(req.params.sessionId).populate(onlinePopulate);
     if (!session || session.status !== "live") return res.status(404).json({ message: "Online class is not live" });
-    if (!isClassTime(session.scheduleId)) return res.status(400).json({ message: "This class is not available right now" });
+    if (!isClassTime(session.scheduleId)) {
+      await endStaleLiveSession(session);
+      return res.status(400).json({ message: "This class is not available right now" });
+    }
     if (!(await canAccessSchedule(session.scheduleId, req.user))) return res.status(403).json({ message: "You cannot join this class" });
 
     const user = await User.findById(req.user.userId).select("fullName role");
