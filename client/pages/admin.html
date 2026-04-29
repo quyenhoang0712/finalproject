@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Console | Tutoring Center</title>
+    <link rel="stylesheet" href="../assets/css/admin.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">TC</div>
+        <div>
+          <strong>Admin Console</strong>
+          <span>System Management</span>
+        </div>
+      </div>
+
+      <nav class="nav-list" aria-label="Admin navigation">
+        <button class="nav-item active" data-view="dashboard"><i data-lucide="layout-dashboard"></i>Dashboard</button>
+        <button class="nav-item" data-view="paymentTasks"><i data-lucide="credit-card"></i>Payment Tasks</button>
+        <button class="nav-item" data-view="users"><i data-lucide="users"></i>Users</button>
+        <button class="nav-item" data-view="teachers"><i data-lucide="presentation"></i>Teachers</button>
+        <button class="nav-item" data-view="students"><i data-lucide="graduation-cap"></i>Students</button>
+        <button class="nav-item" data-view="parents"><i data-lucide="heart-handshake"></i>Parents</button>
+        <button class="nav-item" data-view="subjects"><i data-lucide="book-open"></i>Subjects</button>
+        <button class="nav-item" data-view="classes"><i data-lucide="school"></i>Classes</button>
+        <button class="nav-item" data-view="schedules"><i data-lucide="calendar-days"></i>Schedules</button>
+        <button class="nav-item" data-view="announcements"><i data-lucide="megaphone"></i>Announcements</button>
+        <button class="nav-item" data-view="reports"><i data-lucide="chart-column"></i>Reports</button>
+        <button class="nav-item" data-view="profile"><i data-lucide="user-round"></i>Profile</button>
+      </nav>
+
+      <div class="admin-chip">
+        <div class="avatar" id="sidebarAvatar">AD</div>
+        <div>
+          <strong id="sidebarName">System Admin</strong>
+          <span>Administrator</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="app-main">
+      <header class="topbar">
+        <button id="menuButton" class="menu-button" type="button">Menu</button>
+        <h1 id="pageTitle">Dashboard</h1>
+        <button id="logoutButton" class="logout-button" type="button">Logout</button>
+      </header>
+
+      <section class="content">
+        <div class="page-heading">
+          <h2 id="viewHeading">Dashboard</h2>
+          <p id="viewSubtitle">System overview and key metrics</p>
+        </div>
+
+        <div id="statusMessage" class="status-message"></div>
+
+        <section id="dashboardView" class="view active">
+          <section class="daily-report-hero">
+            <div>
+              <span id="dailyReportDate">Today</span>
+              <h2>Today's Report</h2>
+              <p id="dailyReportSummary">Your daily system report is ready.</p>
+            </div>
+            <div class="daily-report-mark"><i data-lucide="sparkles"></i></div>
+          </section>
+
+          <div class="metric-grid">
+            <article class="metric-card">
+              <span>Classes Today</span>
+              <strong id="metricStudents">0</strong>
+              <small class="good">Scheduled sessions</small>
+              <div class="metric-icon blue">ST</div>
+            </article>
+            <article class="metric-card">
+              <span>Teachers Today</span>
+              <strong id="metricTeachers">0</strong>
+              <small class="good">Assigned to sessions</small>
+              <div class="metric-icon purple">TE</div>
+            </article>
+            <article class="metric-card">
+              <span>Attendance Today</span>
+              <strong id="metricParents">0</strong>
+              <small>On-time rate</small>
+              <div class="metric-icon pink">PA</div>
+            </article>
+            <article class="metric-card">
+              <span>Paid Today</span>
+              <strong id="metricClasses">0</strong>
+              <small id="metricSubjects">0 paid records</small>
+              <div class="metric-icon orange">CL</div>
+            </article>
+          </div>
+
+          <div class="dashboard-grid">
+            <article class="panel">
+              <div class="panel-title">
+                <h3>Today's Attendance</h3>
+                <strong id="attendanceRate">0%</strong>
+              </div>
+              <div class="thin-progress"><span id="attendanceTotalBar"></span></div>
+              <div id="attendanceBars" class="bar-list"></div>
+            </article>
+
+            <article class="panel">
+              <h3>Today's Teaching Load</h3>
+              <div id="classDistribution" class="distribution-list"></div>
+            </article>
+          </div>
+
+          <article class="panel wide-panel">
+            <h3>Today's Activity</h3>
+            <div id="recentEnrollments" class="list-stack"></div>
+          </article>
+
+        </section>
+
+        <section id="paymentTasksView" class="view"></section>
+        <section id="usersView" class="view"></section>
+        <section id="teachersView" class="view"></section>
+        <section id="studentsView" class="view"></section>
+        <section id="parentsView" class="view"></section>
+        <section id="subjectsView" class="view"></section>
+        <section id="classesView" class="view"></section>
+        <section id="schedulesView" class="view"></section>
+        <section id="announcementsView" class="view"></section>
+        <section id="reportsView" class="view"></section>
+        <section id="profileView" class="view"></section>
+      </section>
+    </main>
+
+    <div id="createModal" class="modal-overlay" aria-hidden="true">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-header">
+          <div>
+            <h3 id="modalTitle">Create</h3>
+            <p id="modalSubtitle">Fill in the details below.</p>
+          </div>
+          <button id="modalCloseButton" class="icon-button" type="button" aria-label="Close modal">&times;</button>
+        </div>
+        <div id="modalBody"></div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="../assets/js/admin.js"></script>
+  </body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tutoring Center</title>
+    <link rel="stylesheet" href="../assets/css/styles.css" />
+  </head>
+  <body>
+    <main class="auth-page">
+      <section class="auth-shell" aria-label="Authentication">
+        <div class="app-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" role="img">
+            <path d="M3 8.5 12 4l9 4.5-9 4.5L3 8.5Z" />
+            <path d="M7 11v4c0 1.4 2.2 3 5 3s5-1.6 5-3v-4" />
+            <path d="M21 9v5" />
+          </svg>
+        </div>
+
+        <header class="auth-header">
+          <h1>Tutoring Center</h1>
+          <p>Secure access for staff, students, and parents</p>
+        </header>
+
+        <div class="auth-card">
+          <form id="authForm" class="auth-form">
+            <label class="field" for="email">
+              Email Address
+              <span class="input-wrap">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 6h16v12H4z" />
+                  <path d="m4 7 8 6 8-6" />
+                </svg>
+                <input id="email" name="email" type="email" autocomplete="email" placeholder="Enter your email" required />
+              </span>
+            </label>
+
+            <label class="field" for="password">
+              Password
+              <span class="input-wrap">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="5" y="10" width="14" height="10" rx="2" />
+                  <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                </svg>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autocomplete="current-password"
+                  placeholder="Enter your password"
+                  required
+                />
+              </span>
+            </label>
+
+            <button id="submitButton" class="primary-button" type="submit">Sign In</button>
+            <p id="message" class="message" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <script src="../assets/js/app.js"></script>
+  </body>
+</html>
