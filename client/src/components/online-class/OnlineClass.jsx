@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, safeJson } from "../../api/client";
+import { dateKey } from "../../utils/date";
 
 const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
-
-const dateKey = (dateValue) => {
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
-};
 
 const className = (schedule) => schedule?.classId?.className || schedule?.classId?.courseId?.title || "Online class";
 const courseName = (schedule) => schedule?.classId?.courseId?.title || schedule?.classId?.courseId?.subject || "Course";
@@ -16,14 +11,18 @@ const storedUser = () => safeJson(localStorage.getItem("user"), {});
 const makePeerId = () => `${storedUser()?._id || "user"}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const videoSender = (pc) => pc.getSenders().find((sender) => sender._onlineVideoSender || sender.track?.kind === "video");
 
-function VideoTile({ label, stream, muted = false, classNameValue = "" }) {
+function VideoTile({ label, stream, muted = false, classNameValue = "", emptyText = "Camera connecting..." }) {
   const ref = useRef(null);
+  const hasVideo = Boolean(stream?.getVideoTracks?.().some((track) => track.readyState !== "ended"));
+
   useEffect(() => {
     if (ref.current && ref.current.srcObject !== stream) ref.current.srcObject = stream || null;
   }, [stream]);
+
   return (
     <article className={`online-video-tile ${classNameValue}`}>
-      <video ref={ref} autoPlay muted={muted} playsInline />
+      {stream && <video ref={ref} autoPlay muted={muted} playsInline />}
+      {!hasVideo && <div className="online-video-placeholder">{emptyText}</div>}
       <span>{label}</span>
     </article>
   );
@@ -39,14 +38,16 @@ export function OnlineClass({ role = "", onStatus }) {
   const [micOn, setMicOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
-  const [chatText, setChatText] = useState("");
 
   const localPeerId = useRef("");
+  const roomId = useRef("");
   const localStream = useRef(null);
   const screenStream = useRef(null);
   const peers = useRef(new Map());
+  const queuedIce = useRef(new Map());
   const lastSignalAt = useRef(new Date(0).toISOString());
   const messageIds = useRef(new Set());
+  const signalIds = useRef(new Set());
   const pollTimer = useRef(null);
   const heartbeatTimer = useRef(null);
 
@@ -77,13 +78,14 @@ export function OnlineClass({ role = "", onStatus }) {
   const activeVideoStream = () => (screenSharing && screenStream.current ? screenStream.current : localStream.current);
 
   const sendSignal = useCallback(async (toPeerId, type, payload) => {
-    if (!room?._id || !toPeerId) return;
-    await api(`/api/online-classes/${room._id}/signal`, {
+    const sessionId = roomId.current;
+    if (!sessionId || !toPeerId) return;
+    await api(`/api/online-classes/${sessionId}/signal`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ fromPeerId: localPeerId.current, toPeerId, type, payload }),
     });
-  }, [room?._id]);
+  }, []);
 
   const ensurePeer = useCallback((remotePeerId) => {
     if (peers.current.has(remotePeerId)) return peers.current.get(remotePeerId);
@@ -130,22 +132,47 @@ export function OnlineClass({ role = "", onStatus }) {
     await sendSignal(remotePeerId, "offer", offer);
   }, [ensurePeer, sendSignal]);
 
+  const queueIce = (remotePeerId, candidate) => {
+    if (!queuedIce.current.has(remotePeerId)) queuedIce.current.set(remotePeerId, []);
+    queuedIce.current.get(remotePeerId).push(candidate);
+  };
+
+  const flushQueuedIce = async (remotePeerId, pc) => {
+    const pending = queuedIce.current.get(remotePeerId) || [];
+    queuedIce.current.delete(remotePeerId);
+
+    for (const candidate of pending) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch {
+        // Ignore candidates that are no longer valid for the current SDP.
+      }
+    }
+  };
+
   const handleSignal = useCallback(async (signal) => {
     const pc = ensurePeer(signal.fromPeerId);
     if (signal.type === "offer") {
       await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
+      await flushQueuedIce(signal.fromPeerId, pc);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await sendSignal(signal.fromPeerId, "answer", answer);
     }
     if (signal.type === "answer" && pc.signalingState !== "stable") {
       await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
+      await flushQueuedIce(signal.fromPeerId, pc);
     }
     if (signal.type === "candidate") {
+      if (!pc.remoteDescription) {
+        queueIce(signal.fromPeerId, signal.payload);
+        return;
+      }
+
       try {
         await pc.addIceCandidate(new RTCIceCandidate(signal.payload));
       } catch {
-        // Slow polling can deliver ICE before SDP; a later state poll recovers.
+        queueIce(signal.fromPeerId, signal.payload);
       }
     }
   }, [ensurePeer, sendSignal]);
@@ -173,9 +200,23 @@ export function OnlineClass({ role = "", onStatus }) {
   }, [ensurePeer, offerTo]);
 
   const pollState = useCallback(async () => {
-    if (!room?._id) return;
-    const state = await api(`/api/online-classes/${room._id}/state?peerId=${encodeURIComponent(localPeerId.current)}&since=${encodeURIComponent(lastSignalAt.current)}`);
-    lastSignalAt.current = new Date().toISOString();
+    const sessionId = roomId.current;
+    if (!sessionId) return;
+    const state = await api(`/api/online-classes/${sessionId}/state?peerId=${encodeURIComponent(localPeerId.current)}&since=${encodeURIComponent(lastSignalAt.current)}`);
+    const nextSignals = (state.signals || []).filter((signal) => {
+      const id = String(signal._id || `${signal.fromPeerId}:${signal.toPeerId}:${signal.type}:${signal.createdAt}`);
+      if (signalIds.current.has(id)) return false;
+      signalIds.current.add(id);
+      return true;
+    });
+    const eventTimes = [...(state.messages || []), ...nextSignals]
+      .map((item) => new Date(item.createdAt).getTime())
+      .filter((time) => Number.isFinite(time));
+
+    if (eventTimes.length) {
+      lastSignalAt.current = new Date(Math.max(0, Math.max(...eventTimes) - 1)).toISOString();
+    }
+
     setRoom(state);
     setParticipants(state.participants || []);
     setMessages((current) => {
@@ -189,24 +230,26 @@ export function OnlineClass({ role = "", onStatus }) {
       return next.slice(-200);
     });
     await syncPeers(state.participants || []);
-    for (const signal of state.signals || []) await handleSignal(signal);
+    for (const signal of nextSignals) await handleSignal(signal);
 
     if (state.status !== "live") closeRoom(false);
-  }, [handleSignal, room?._id, syncPeers]);
+  }, [handleSignal, syncPeers]);
 
   const closeRoom = useCallback(async (sendLeave = true) => {
+    const sessionId = roomId.current;
     window.clearInterval(pollTimer.current);
     window.clearInterval(heartbeatTimer.current);
     pollTimer.current = null;
     heartbeatTimer.current = null;
     peers.current.forEach((pc) => pc.close());
     peers.current.clear();
+    queuedIce.current.clear();
     localStream.current?.getTracks().forEach((track) => track.stop());
     screenStream.current?.getTracks().forEach((track) => track.stop());
     localStream.current = null;
     screenStream.current = null;
-    if (sendLeave && room?._id) {
-      await api(`/api/online-classes/${room._id}/leave`, { method: "POST" }).catch(() => {});
+    if (sendLeave && sessionId) {
+      await api(`/api/online-classes/${sessionId}/leave`, { method: "POST" }).catch(() => {});
     }
     setRoom(null);
     setParticipants([]);
@@ -215,16 +258,20 @@ export function OnlineClass({ role = "", onStatus }) {
     setMicOn(false);
     setCameraOn(true);
     setScreenSharing(false);
+    roomId.current = "";
     localPeerId.current = "";
     lastSignalAt.current = new Date(0).toISOString();
     messageIds.current.clear();
+    signalIds.current.clear();
     load().catch(() => {});
-  }, [load, room?._id]);
+  }, [load]);
 
   useEffect(() => () => {
     window.clearInterval(pollTimer.current);
     window.clearInterval(heartbeatTimer.current);
     peers.current.forEach((pc) => pc.close());
+    queuedIce.current.clear();
+    roomId.current = "";
     localStream.current?.getTracks().forEach((track) => track.stop());
     screenStream.current?.getTracks().forEach((track) => track.stop());
   }, []);
@@ -244,11 +291,14 @@ export function OnlineClass({ role = "", onStatus }) {
       localPeerId.current = makePeerId();
       lastSignalAt.current = new Date(0).toISOString();
       messageIds.current.clear();
+      signalIds.current.clear();
+      queuedIce.current.clear();
       const joined = await api(`/api/online-classes/${session._id}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ peerId: localPeerId.current }),
       });
+      roomId.current = joined._id;
 
       try {
         localStream.current = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -351,15 +401,28 @@ export function OnlineClass({ role = "", onStatus }) {
 
   const sendMessage = async (event) => {
     event.preventDefault();
-    const text = chatText.trim();
+    const form = event.currentTarget;
+    const text = String(new FormData(form).get("message") || "").trim();
     if (!text) return;
-    await api(`/api/online-classes/${room._id}/message`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    setChatText("");
-    await pollState();
+    const sessionId = roomId.current || room?._id;
+    if (!sessionId) return;
+
+    try {
+      const saved = await api(`/api/online-classes/${sessionId}/message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      form.reset();
+      if (saved?._id) {
+        messageIds.current.add(saved._id);
+        setMessages((current) => [...current, saved].slice(-200));
+      }
+      await pollState();
+    } catch (err) {
+      setMessage(err.message || "Could not send comment.");
+      onStatus?.(err.message || "Could not send comment.");
+    }
   };
 
   const endClass = async () => {
@@ -368,8 +431,20 @@ export function OnlineClass({ role = "", onStatus }) {
     await closeRoom(false);
   };
 
-  const remoteTiles = useMemo(() => [...remoteStreams.entries()], [remoteStreams]);
   const localPreviewStream = screenSharing && screenStream.current ? screenStream.current : localStream.current;
+  const teacherParticipant = participants.find((item) => item.role === "teacher") || (isTeacher ? localParticipant : null);
+  const isLocalTeacher = teacherParticipant?.peerId === localPeerId.current || (!teacherParticipant && isTeacher);
+  const teacherStream = isLocalTeacher ? localPreviewStream : remoteStreams.get(teacherParticipant?.peerId) || null;
+  const teacherLabel = screenSharing && isLocalTeacher
+    ? "Teacher screen"
+    : `${teacherParticipant?.fullName || user?.fullName || "Teacher"}${isLocalTeacher ? " (You)" : ""}`;
+  const studentTiles = participants
+    .filter((item) => item.role !== "teacher")
+    .map((item) => ({
+      participant: item,
+      stream: item.peerId === localPeerId.current ? localPreviewStream : remoteStreams.get(item.peerId) || null,
+      muted: item.peerId === localPeerId.current,
+    }));
 
   return (
     <section className="online-class-shell">
@@ -417,12 +492,26 @@ export function OnlineClass({ role = "", onStatus }) {
             </header>
             <div className="online-room-body">
               <section className="online-stage">
-                <div className="online-video-grid">
-                  <VideoTile label={screenSharing ? "Screen share" : "You"} stream={localPreviewStream} muted classNameValue="local" />
-                  <div className="online-remote-grid">
-                    {remoteTiles.map(([peer, stream]) => (
-                      <VideoTile key={peer} label={participants.find((item) => item.peerId === peer)?.fullName || "Participant"} stream={stream} />
+                <div className="online-video-layout">
+                  <VideoTile
+                    label={teacherLabel}
+                    stream={teacherStream}
+                    muted={isLocalTeacher}
+                    classNameValue="teacher-main"
+                    emptyText="Waiting for teacher camera..."
+                  />
+                  <div className="online-student-strip" aria-label="Student cameras">
+                    {studentTiles.map(({ participant, stream, muted }) => (
+                      <VideoTile
+                        key={participant.peerId}
+                        label={`${participant.fullName}${participant.peerId === localPeerId.current ? " (You)" : ""}`}
+                        stream={stream}
+                        muted={muted}
+                        classNameValue="student-thumb"
+                        emptyText="Camera not connected"
+                      />
                     ))}
+                    {!studentTiles.length && <div className="online-student-empty">No students in the room yet.</div>}
                   </div>
                 </div>
                 <div className="online-controls">
@@ -458,7 +547,7 @@ export function OnlineClass({ role = "", onStatus }) {
                     ))}
                   </div>
                   <form onSubmit={sendMessage}>
-                    <input value={chatText} onChange={(event) => setChatText(event.target.value)} placeholder="Write a comment..." />
+                    <input name="message" type="text" placeholder="Write a comment..." autoComplete="off" />
                     <button type="submit">Send</button>
                   </form>
                 </section>

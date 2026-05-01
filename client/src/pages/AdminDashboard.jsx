@@ -16,11 +16,13 @@ import {
   School,
   ShieldCheck,
   Sparkles,
+  Trash2,
   UserRound,
   Users,
   WalletCards,
 } from "lucide-react";
 import { api, safeJson } from "../api/client";
+import { dateKey } from "../utils/date";
 import "../styles/admin.css";
 
 const navItems = [
@@ -72,12 +74,6 @@ const initialData = {
   reports: null,
 };
 
-const dateKey = (value) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-};
-
 const monthTitle = (date) => date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 const getId = (value) => (typeof value === "object" && value ? value._id : value);
 const getName = (value, fallback = "Unknown") => {
@@ -112,8 +108,9 @@ const readImageFile = (file) =>
     reader.readAsDataURL(file);
   });
 
-function StatusMessage({ status }) {
-  if (!status.text) return <div className="status-message" />;
+function StatusMessage({ status, onDismiss }) {
+  if (!status.text) return null;
+  if (status.type === "success") return <div className="status-message" />;
   return <div className={`status-message ${status.type || ""}`.trim()}>{status.text}</div>;
 }
 
@@ -409,10 +406,11 @@ export function AdminDashboard({ user, onLogout }) {
   };
 
   const deleteRecord = async (kind, id) => {
-    const labels = { user: "user", course: "subject" };
+    const labels = { user: "user", course: "subject", class: "class" };
+    const endpoints = { user: "users", course: "courses", class: "classes" };
     if (!window.confirm(`Delete this ${labels[kind]}?`)) return;
     try {
-      await api(`/api/${kind === "user" ? "users" : "courses"}/${id}`, { method: "DELETE" });
+      await api(`/api/${endpoints[kind]}/${id}`, { method: "DELETE" });
       await loadData(`${labels[kind][0].toUpperCase()}${labels[kind].slice(1)} deleted.`);
     } catch (error) {
       setStatus({ text: error.message || "Could not delete.", type: "error" });
@@ -536,7 +534,7 @@ export function AdminDashboard({ user, onLogout }) {
             <h2>{pageTitle}</h2>
             <p>{pageSubtitle}</p>
           </div>
-          <StatusMessage status={status} />
+          <StatusMessage status={status} onDismiss={() => setStatus({ text: "", type: "" })} />
           <section className="view active">
             {view === "dashboard" && <DashboardView data={data} announcements={announcements} onConfirmPayment={confirmPayment} />}
             {view === "paymentTasks" && (
@@ -554,7 +552,7 @@ export function AdminDashboard({ user, onLogout }) {
             {view === "students" && <RoleDirectory view="students" role="student" data={data} onOpenModal={setModal} onDelete={(id) => deleteRecord("user", id)} />}
             {view === "parents" && <RoleDirectory view="parents" role="parent" data={data} onOpenModal={setModal} onDelete={(id) => deleteRecord("user", id)} />}
             {view === "subjects" && <SubjectsView data={data} onOpenModal={setModal} onDelete={(id) => deleteRecord("course", id)} />}
-            {view === "classes" && <ClassesView data={data} onOpenModal={setModal} />}
+            {view === "classes" && <ClassesView data={data} onOpenModal={setModal} onDelete={(id) => deleteRecord("class", id)} />}
             {view === "schedules" && <SchedulesView data={data} scheduleMonth={scheduleMonth} setScheduleMonth={setScheduleMonth} />}
             {view === "announcements" && <AnnouncementsView rows={announcements} onOpenModal={setModal} onDelete={(id) => setAnnouncements((items) => items.filter((item) => item.id !== id))} />}
             {view === "reports" && <ReportsView data={data} payrollRows={payrollRows} />}
@@ -945,7 +943,7 @@ function SubjectsView({ data, onOpenModal, onDelete }) {
   );
 }
 
-function ClassesView({ data, onOpenModal }) {
+function ClassesView({ data, onOpenModal, onDelete }) {
   const [query, setQuery] = useState("");
   const rows = data.classes.filter((item) => `${item.className} ${getName(item.courseId)} ${getName(item.teacherId)}`.toLowerCase().includes(query.toLowerCase()));
 
@@ -975,6 +973,10 @@ function ClassesView({ data, onOpenModal }) {
                 <div><strong>{current}/{capacity}</strong><span>{percent}% full</span></div>
                 <div className="thin-progress"><span style={{ width: `${percent}%` }} /></div>
               </div>
+              <button className="danger-button" type="button" onClick={() => onDelete(classItem._id)}>
+                <Trash2 size={15} />
+                Delete
+              </button>
             </article>
           );
         }) : <Empty>No classes yet.</Empty>}

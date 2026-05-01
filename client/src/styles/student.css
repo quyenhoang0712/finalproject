@@ -2541,11 +2541,51 @@ input {
   font-style: italic;
 }
 
-.profile-summary .ghost-button {
-  align-self: end;
-  min-width: 120px;
-  height: 42px;
-  border-radius: 8px;
+.profile-summary .profile-edit-button {
+  justify-self: end;
+  align-self: center;
+  min-width: 156px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 18px;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.24), transparent 28%),
+    linear-gradient(135deg, var(--role-color), var(--role-color-dark));
+  border: 0;
+  border-radius: 12px;
+  box-shadow:
+    0 16px 32px rgba(15, 23, 42, 0.14),
+    0 8px 18px color-mix(in srgb, var(--role-color) 24%, transparent);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+
+.profile-summary .profile-edit-button svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  stroke-width: 2.6;
+}
+
+.profile-summary .profile-edit-button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+  box-shadow:
+    0 20px 38px rgba(15, 23, 42, 0.16),
+    0 10px 22px color-mix(in srgb, var(--role-color) 30%, transparent);
+}
+
+.profile-summary .profile-edit-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--role-color) 32%, transparent);
+  outline-offset: 3px;
 }
 
 .profile-info-grid {
@@ -2579,8 +2619,10 @@ input {
     padding-top: 0;
   }
 
-  .profile-summary .ghost-button {
+  .profile-summary .profile-edit-button {
     width: 100%;
+    justify-self: stretch;
+    align-self: stretch;
   }
 }
 
@@ -2811,10 +2853,13 @@ input {
   max-width: min(360px, calc(100vw - 32px));
   padding: 13px 16px;
   color: #ffffff;
+  text-align: left;
   font-weight: 800;
   background: #16a34a;
+  border: 0;
   border-radius: 12px;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.24);
+  cursor: pointer;
   opacity: 0;
   transform: translateY(-10px);
   transition: opacity 0.2s ease, transform 0.2s ease;
@@ -3625,7 +3670,7 @@ input {
   grid-area: header;
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 16px;
 }
 
@@ -3657,8 +3702,18 @@ input {
 .assignment-actions {
   grid-area: actions;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 10px;
+}
+
+.assignment-actions .badge {
+  flex: 0 0 auto;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .assignment-button {
@@ -3764,8 +3819,13 @@ input {
     flex-direction: column;
   }
 
-  .assignment-card-header > .badge,
+  .assignment-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .assignment-actions,
+  .assignment-actions .badge,
   .assignment-button,
   .student-file-picker,
   .student-submit-row .assignment-button {
@@ -4277,4 +4337,94 @@ input {
   .class-modal-card .class-roster-list {
     padding-inline: 16px;
   }
+}
+
+/* Profile modal is portaled to body so it must own the viewport and scroll safely. */
+.profile-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 5200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(8px);
+}
+
+.profile-modal .profile-edit-form {
+  width: min(620px, 100%);
+  max-height: calc(100dvh - 48px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  overflow: auto;
+}
+
+.profile-modal-actions {
+  position: sticky;
+  bottom: -22px;
+  margin: 0 -22px -22px;
+  padding: 14px 22px 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), #ffffff 28%);
+}
+
+@media (max-width: 640px) {
+  .profile-modal {
+    place-items: end center;
+    padding: 12px;
+  }
+
+  .profile-modal .profile-edit-form {
+    grid-template-columns: 1fr;
+    max-height: calc(100dvh - 24px);
+  }
+
+  .profile-modal-actions {
+    flex-direction: column-reverse;
+  }
+}
+
+/* Feedback history cards should be separated, not stacked edge-to-edge. */
+.feedback-history {
+  overflow: hidden;
+}
+
+.feedback-history .feedback-list {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.feedback-history .feedback-card {
+  margin: 0;
+  border-left: 5px solid var(--pink);
+  border-radius: 14px;
+  box-shadow: 0 10px 22px rgba(17, 24, 39, 0.06);
+}
+
+/* Topbar avatar must crop uploaded profile photos consistently. */
+.student-topbar .avatar {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  min-width: 44px;
+  max-width: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 999px;
+  line-height: 1;
+}
+
+.student-topbar .avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  border-radius: inherit;
 }

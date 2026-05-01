@@ -88,6 +88,36 @@ router.post("/:id/bank-transfer", authMiddleware, async (req, res) => {
   }
 });
 
+// Parent/student marks that the bank transfer has been sent.
+// Admin still confirms the money before the payment becomes paid.
+router.post("/:id/bank-transfer/submitted", authMiddleware, async (req, res) => {
+  try {
+    const payment = await Payment.findById(req.params.id);
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    if (!canAccessPayment(payment, req.user)) {
+      return res.status(403).json({ message: "You do not have permission to update this payment" });
+    }
+
+    if (!payment.bankTransferCode) {
+      payment.bankTransferCode = transferCodeFor(payment);
+    }
+
+    const submittedAt = new Date();
+    payment.paymentMethod = "bank_transfer";
+    payment.bankTransferRequestedAt = submittedAt;
+    payment.note = `Parent marked bank transfer as submitted at ${submittedAt.toISOString()}`;
+    await payment.save();
+
+    const updatedPayment = await populatePayment(Payment.findById(payment._id));
+    res.status(200).json(updatedPayment);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
 // CREATE payment
 router.post("/", authMiddleware, roleMiddleware("admin"), async (req, res) => {
   try {

@@ -13,6 +13,7 @@ import {
   FolderOpen,
   LayoutDashboard,
   MessageSquare,
+  PencilLine,
   Sparkles,
   Upload,
   UserRound,
@@ -21,6 +22,7 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import { OnlineClass } from "../components/online-class/OnlineClass";
+import { dateKey } from "../utils/date";
 import "../styles/student.css";
 import "../styles/onlineClass.css";
 
@@ -60,10 +62,6 @@ const initialData = {
   feedbacks: [],
 };
 
-const dateKey = (value) => {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
-};
 const monthTitle = (value) => value.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 const getId = (value) => (typeof value === "object" && value ? value._id : value);
 const sameId = (left, right) => String(left || "") === String(right || "");
@@ -89,6 +87,7 @@ const readFileData = (file) =>
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+const readImageFile = (file) => (file?.size ? readFileData(file) : Promise.resolve(""));
 
 const downloadFile = (item) => {
   if (!item?.fileData) return;
@@ -103,7 +102,13 @@ function Empty({ children = "No records found." }) {
 }
 
 function Status({ text }) {
-  return text ? <div className="status-message">{text}</div> : <div className="status-message" />;
+  const isSuccess = /success|successfully|submitted|received|updated/i.test(text || "");
+  if (isSuccess) return null;
+  return text ? <div className="status-message">{text}</div> : null;
+}
+
+function SuccessToast({ text, onDismiss }) {
+  return null;
 }
 
 function Badge({ children }) {
@@ -143,12 +148,15 @@ function Table({ rows, columns }) {
 }
 
 export function StudentDashboard({ user, onLogout }) {
+  const [currentUser, setCurrentUser] = useState(user);
   const [view, setView] = useState("dashboard");
   const [status, setStatus] = useState("");
   const [data, setData] = useState(initialData);
   const [classRosters, setClassRosters] = useState({});
   const [scheduleMonth, setScheduleMonth] = useState(new Date());
   const [submitPopup, setSubmitPopup] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profilePreview, setProfilePreview] = useState("");
 
   const load = async (successText = "") => {
     setStatus("Loading student data...");
@@ -209,6 +217,32 @@ export function StudentDashboard({ user, onLogout }) {
     await load("Feedback sent successfully.");
   };
 
+  const submitProfile = async (event) => {
+    event.preventDefault();
+    try {
+      const form = new FormData(event.currentTarget);
+      const avatar = await readImageFile(form.get("avatar"));
+      const payload = {
+        fullName: String(form.get("fullName") || "").trim(),
+        email: String(form.get("email") || "").trim(),
+        caption: String(form.get("caption") || "").trim(),
+      };
+      if (avatar) payload.avatar = avatar;
+      const updated = await api(`/api/users/${currentUser._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      setCurrentUser(updated);
+      localStorage.setItem("user", JSON.stringify(updated));
+      setProfileOpen(false);
+      setProfilePreview("");
+      setStatus("Profile updated successfully.");
+    } catch (error) {
+      setStatus(error.message || "Could not update profile.");
+    }
+  };
+
   const loadRoster = async (classId) => {
     if (!classId || classRosters[classId]) return;
     try {
@@ -228,11 +262,11 @@ export function StudentDashboard({ user, onLogout }) {
           <div className="brand-mark">ML</div>
           <div>
             <strong>My Learning</strong>
-            <span>{user.fullName}</span>
+            <span>{currentUser.fullName}</span>
           </div>
         </div>
         <button className="logout-button" type="button" onClick={onLogout}>Logout</button>
-        <div className="avatar">{shortName(user.fullName)}</div>
+        <div className="avatar">{currentUser.avatar ? <img src={currentUser.avatar} alt={currentUser.fullName} /> : shortName(currentUser.fullName)}</div>
       </header>
 
       <nav className="student-nav" aria-label="Student navigation">
@@ -245,6 +279,7 @@ export function StudentDashboard({ user, onLogout }) {
       </nav>
 
       <main className="student-main">
+        <SuccessToast text={status} onDismiss={() => setStatus("")} />
         <section className="page-heading">
           <h1>{title}</h1>
           <p>{subtitle}</p>
@@ -273,7 +308,17 @@ export function StudentDashboard({ user, onLogout }) {
             />
           )}
           {view === "online" && <OnlineClass role="student" onStatus={setStatus} />}
-          {view === "profile" && <ProfileView user={user} data={data} />}
+          {view === "profile" && (
+            <ProfileView
+              user={currentUser}
+              data={data}
+              preview={profilePreview}
+              setPreview={setProfilePreview}
+              isOpen={profileOpen}
+              setOpen={setProfileOpen}
+              onSubmit={submitProfile}
+            />
+          )}
         </section>
       </main>
       <SubmitPopup popup={submitPopup} onClose={() => setSubmitPopup(null)} />
@@ -632,10 +677,10 @@ function AssignmentsView({ assignments, onSubmit }) {
                 <h3>{item.title}</h3>
                 <p>{className(item.classId)} - due {dateKey(item.dueDate)}</p>
               </div>
-              <Badge>{item.submission ? "submitted" : "pending"}</Badge>
             </div>
             <p className="assignment-description">{item.description || "No description"}</p>
             <div className="assignment-actions">
+              <Badge>{item.submission ? "submitted" : "pending"}</Badge>
               <button className="assignment-button primary" type="button" onClick={() => setActiveAssignment(item)}>
                 View details
               </button>
@@ -801,13 +846,15 @@ function FeedbackView({ enrollments, feedbacks, onSubmit }) {
 
       <div className="feedback-history">
         <h2>Sent Feedback</h2>
-        {feedbacks.length ? feedbacks.map((item) => (
-          <article className="feedback-card" key={item._id}>
-            <strong>{className(item.classId)}</strong>
-            <p>{item.comment || "No comment"}</p>
-            <Badge>{item.authorRole || "student"}</Badge>
-          </article>
-        )) : <Empty>No feedback sent yet.</Empty>}
+        <div className="feedback-list">
+          {feedbacks.length ? feedbacks.map((item) => (
+            <article className="feedback-card" key={item._id}>
+              <strong>{className(item.classId)}</strong>
+              <p>{item.comment || "No comment"}</p>
+              <Badge>{item.authorRole || "student"}</Badge>
+            </article>
+          )) : <Empty>No feedback sent yet.</Empty>}
+        </div>
       </div>
     </section>
   );
@@ -827,31 +874,76 @@ function FeedbackSelect({ name, label }) {
   );
 }
 
-function ProfileView({ user, data }) {
+function ProfileView({ user, data, preview, setPreview, isOpen, setOpen, onSubmit }) {
+  const avatar = preview || user.avatar || "";
+
+  const previewFile = async (event) => {
+    const nextPreview = await readImageFile(event.target.files?.[0]);
+    if (nextPreview) setPreview(nextPreview);
+  };
+
   return (
-    <article className="profile-card profile-showcase">
-      <div className="profile-cover" />
-      <div className="profile-summary">
-        <div className="profile-photo profile-photo-large">{user.avatar ? <img src={user.avatar} alt={user.fullName} /> : <span>{shortName(user.fullName)}</span>}</div>
-        <div className="profile-title">
-          <h3>{user.fullName}</h3>
-          <p>Student Account</p>
-          <small>{user.caption || "No caption yet."}</small>
+    <>
+      <article className="profile-card profile-showcase">
+        <div className="profile-cover" />
+        <div className="profile-summary">
+          <div className="profile-photo profile-photo-large">{user.avatar ? <img src={user.avatar} alt={user.fullName} /> : <span>{shortName(user.fullName)}</span>}</div>
+          <div className="profile-title">
+            <h3>{user.fullName}</h3>
+            <p>Student Account</p>
+            <small>{user.caption || "No caption yet."}</small>
+          </div>
+          <button className="ghost-button profile-edit-button" type="button" onClick={() => setOpen(true)}>
+            <PencilLine size={16} />
+            <span>Edit Profile</span>
+          </button>
         </div>
-      </div>
-      <div className="profile-info-grid">
-        <section>
-          <h4>Contact Information</h4>
-          <p><span>Email</span>{user.email}</p>
-          <p><span>Role</span>{user.role}</p>
-        </section>
-        <section>
-          <h4>Learning Summary</h4>
-          <p><span>Classes</span>{data.enrollments.length}</p>
-          <p><span>Assignments</span>{data.assignments.length}</p>
-          <p><span>Materials</span>{data.materials.length}</p>
-        </section>
-      </div>
-    </article>
+        <div className="profile-info-grid">
+          <section>
+            <h4>Contact Information</h4>
+            <p><span>Email</span>{user.email}</p>
+            <p><span>Role</span>{user.role}</p>
+          </section>
+          <section>
+            <h4>Learning Summary</h4>
+            <p><span>Classes</span>{data.enrollments.length}</p>
+            <p><span>Assignments</span>{data.assignments.length}</p>
+            <p><span>Materials</span>{data.materials.length}</p>
+          </section>
+        </div>
+      </article>
+
+      {isOpen && createPortal((
+        <div className="profile-modal" aria-hidden="false" onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
+          <form className="profile-form profile-edit-form" onSubmit={onSubmit}>
+            <div className="profile-modal-header">
+              <div>
+                <h3>Edit Profile</h3>
+                <p>Update your personal information.</p>
+              </div>
+              <button className="icon-button" type="button" aria-label="Close" onClick={() => setOpen(false)}>x</button>
+            </div>
+            <div className="profile-avatar-picker">
+              <label className="profile-avatar-preview" htmlFor="studentProfileAvatarInput">
+                <span>{avatar ? <img src={avatar} alt={user.fullName} /> : <span>{shortName(user.fullName)}</span>}</span>
+                <span className="profile-avatar-camera">Change photo</span>
+              </label>
+              <div>
+                <strong>Profile picture</strong>
+                <small>Choose an image to preview before saving.</small>
+              </div>
+            </div>
+            <input id="studentProfileAvatarInput" className="profile-file-input" name="avatar" type="file" accept="image/*" onChange={previewFile} />
+            <label>Full name<input name="fullName" defaultValue={user.fullName || ""} required /></label>
+            <label>Email<input name="email" type="email" defaultValue={user.email || ""} required /></label>
+            <label className="profile-wide">Caption<textarea name="caption" placeholder="Write something about yourself..." defaultValue={user.caption || ""} /></label>
+            <div className="profile-modal-actions">
+              <button className="ghost-button" type="button" onClick={() => setOpen(false)}>Cancel</button>
+              <button className="small-button" type="submit">Save Profile</button>
+            </div>
+          </form>
+        </div>
+      ), document.body)}
+    </>
   );
 }

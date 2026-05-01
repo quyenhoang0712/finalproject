@@ -16,12 +16,7 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import { OnlineClass } from "../components/online-class/OnlineClass";
-
-const dateKey = (dateValue) => {
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-};
+import { dateKey } from "../utils/date";
 
 const getId = (value) => (typeof value === "object" && value ? value._id : value);
 const sameId = (left, right) => String(left || "") === String(right || "");

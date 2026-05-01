@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CalendarDays,
   Check,
@@ -8,6 +9,7 @@ import {
   CreditCard,
   LayoutDashboard,
   MessageSquare,
+  PencilLine,
   Sparkles,
   UserRound,
   Users,
@@ -16,6 +18,7 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import { OnlineClass } from "../components/online-class/OnlineClass";
+import { dateKey } from "../utils/date";
 import "../styles/parent.css";
 import "../styles/onlineClass.css";
 
@@ -50,10 +53,6 @@ const initialData = {
   feedbacks: [],
 };
 
-const dateKey = (value) => {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
-};
 const getId = (value) => (typeof value === "object" && value ? value._id : value);
 const sameId = (left, right) => String(left || "") === String(right || "");
 const className = (item) => item?.className || item?.courseId?.title || "Unknown class";
@@ -71,24 +70,38 @@ const bankQrUrl = (payment) => {
   const info = `ML ${paymentCode(payment)}`;
   return `https://img.vietqr.io/image/VCB-0123456789-compact2.png?amount=${Number(payment.amount || 0)}&addInfo=${encodeURIComponent(info)}&accountName=${encodeURIComponent("Tutoring Center")}`;
 };
+const readImageFile = (file) =>
+  new Promise((resolve, reject) => {
+    if (!file?.size) return resolve("");
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
 function Empty({ children = "No records found." }) {
   return <div className="empty-state">{children}</div>;
 }
 
 function Status({ text }) {
-  return text ? <div className="status-message">{text}</div> : <div className="status-message" />;
+  const isSuccess = /success|successfully|requested|copied|submitted|marked/i.test(text || "");
+  if (isSuccess) return null;
+  return text ? <div className="status-message">{text}</div> : null;
+}
+
+function SuccessToast({ text, onDismiss }) {
+  return null;
 }
 
 function Badge({ children }) {
   return <span className="badge">{children}</span>;
 }
 
-function ListRow({ title, subtitle, badge, icon }) {
+function ListRow({ title, subtitle, badge, icon, type = "" }) {
   return (
-    <div className="list-row family-update-row">
+    <div className={`list-row ${icon ? "family-update-row" : ""} ${type ? `family-update-row-${type}` : ""}`}>
       {icon && <span className="family-update-icon">{icon}</span>}
-      <div>
+      <div className="list-row-main">
         <strong>{title}</strong>
         <span>{subtitle}</span>
       </div>
@@ -97,13 +110,29 @@ function ListRow({ title, subtitle, badge, icon }) {
   );
 }
 
+function FamilyUpdateRow({ title, subtitle, badge, icon, type = "" }) {
+  return (
+    <article className={`family-update-card-row ${type ? `family-update-card-row-${type}` : ""}`}>
+      <span className="family-update-card-icon">{icon}</span>
+      <div className="family-update-card-main">
+        <strong>{title}</strong>
+        <span>{subtitle}</span>
+      </div>
+      {badge && <Badge>{badge}</Badge>}
+    </article>
+  );
+}
+
 export function ParentDashboard({ user, onLogout }) {
+  const [currentUser, setCurrentUser] = useState(user);
   const [view, setView] = useState("dashboard");
   const [status, setStatus] = useState("");
   const [data, setData] = useState(initialData);
   const [scheduleMonth, setScheduleMonth] = useState(new Date());
   const [attendanceModal, setAttendanceModal] = useState(null);
   const [bankModal, setBankModal] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profilePreview, setProfilePreview] = useState("");
 
   const load = async (successText = "") => {
     setStatus("Loading parent data...");
@@ -137,6 +166,32 @@ export function ParentDashboard({ user, onLogout }) {
     await load("Feedback sent successfully.");
   };
 
+  const submitProfile = async (event) => {
+    event.preventDefault();
+    try {
+      const form = new FormData(event.currentTarget);
+      const avatar = await readImageFile(form.get("avatar"));
+      const payload = {
+        fullName: String(form.get("fullName") || "").trim(),
+        email: String(form.get("email") || "").trim(),
+        caption: String(form.get("caption") || "").trim(),
+      };
+      if (avatar) payload.avatar = avatar;
+      const updated = await api(`/api/users/${currentUser._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      setCurrentUser(updated);
+      localStorage.setItem("user", JSON.stringify(updated));
+      setProfileOpen(false);
+      setProfilePreview("");
+      setStatus("Profile updated successfully.");
+    } catch (error) {
+      setStatus(error.message || "Could not update profile.");
+    }
+  };
+
   const requestBankTransfer = async (payment) => {
     try {
       const updated = await api(`/api/payments/${payment._id}/bank-transfer`, { method: "POST" });
@@ -148,6 +203,20 @@ export function ParentDashboard({ user, onLogout }) {
       setStatus("Bank transfer details requested.");
     } catch (error) {
       setStatus(error.message || "Could not create bank transfer request.");
+    }
+  };
+
+  const submitBankTransfer = async (payment) => {
+    try {
+      const updated = await api(`/api/payments/${payment._id}/bank-transfer/submitted`, { method: "POST" });
+      setData((current) => ({
+        ...current,
+        payments: current.payments.map((item) => (item._id === updated._id ? updated : item)),
+      }));
+      setBankModal(updated);
+      setStatus("Transfer marked as submitted. Admin will confirm after money arrives.");
+    } catch (error) {
+      setStatus(error.message || "Could not mark transfer as submitted.");
     }
   };
 
@@ -169,14 +238,15 @@ export function ParentDashboard({ user, onLogout }) {
           <div className="brand-mark">PD</div>
           <div>
             <strong>Parent Dashboard</strong>
-            <span>{user.fullName}</span>
+            <span>{currentUser.fullName}</span>
           </div>
         </div>
         <button className="logout-button" type="button" onClick={onLogout}>Logout</button>
-        <div className="avatar">{user.avatar ? <img src={user.avatar} alt={user.fullName} /> : shortName(user.fullName)}</div>
+        <div className="avatar">{currentUser.avatar ? <img src={currentUser.avatar} alt={currentUser.fullName} /> : shortName(currentUser.fullName)}</div>
       </header>
 
       <main className="parent-main">
+        <SuccessToast text={status} onDismiss={() => setStatus("")} />
         <nav className="parent-nav" aria-label="Parent navigation">
           {navItems.map(([key, label, Icon]) => (
             <button className={`nav-card ${view === key ? "active" : ""}`} type="button" data-view={key} key={key} onClick={() => setView(key)}>
@@ -206,13 +276,23 @@ export function ParentDashboard({ user, onLogout }) {
             )}
             {view === "online" && <OnlineClass role="parent" onStatus={setStatus} />}
             {view === "payments" && <PaymentsView payments={data.payments} onBankTransfer={requestBankTransfer} />}
-            {view === "profile" && <ProfileView user={user} data={data} />}
+            {view === "profile" && (
+              <ProfileView
+                user={currentUser}
+                data={data}
+                preview={profilePreview}
+                setPreview={setProfilePreview}
+                isOpen={profileOpen}
+                setOpen={setProfileOpen}
+                onSubmit={submitProfile}
+              />
+            )}
           </section>
         </section>
       </main>
 
       {attendanceModal && <AttendanceModal details={attendanceModal} onClose={() => setAttendanceModal(null)} />}
-      {bankModal && <BankTransferModal payment={bankModal} onClose={() => setBankModal(null)} onCopy={copyPaymentCode} />}
+      {bankModal && <BankTransferModal payment={bankModal} onClose={() => setBankModal(null)} onCopy={copyPaymentCode} onSubmitted={submitBankTransfer} />}
     </>
   );
 }
@@ -256,10 +336,10 @@ function DashboardView({ data }) {
           <h2>Family Updates</h2>
           <div className="stack-list">
             {openPayments.slice(0, 3).map((item) => (
-              <ListRow key={item._id} title={className(item.classId)} subtitle={`${money(item.amount)} VND`} badge={item.status || "pending"} icon={<CreditCard size={18} />} />
+              <FamilyUpdateRow key={item._id} title={className(item.classId)} subtitle={`${money(item.amount)} VND`} badge={item.status || "pending"} icon={<CreditCard size={18} />} type="payment" />
             ))}
             {recentFeedback.map((item) => (
-              <ListRow key={item._id} title={className(item.classId)} subtitle={item.comment || "Feedback sent"} badge={item.authorRole || "parent"} icon={<MessageSquare size={18} />} />
+              <FamilyUpdateRow key={item._id} title={className(item.classId)} subtitle={item.comment || "Feedback sent"} badge={item.authorRole || "parent"} icon={<MessageSquare size={18} />} type="feedback" />
             ))}
             {!openPayments.length && !recentFeedback.length && <Empty>No family updates yet.</Empty>}
           </div>
@@ -270,6 +350,7 @@ function DashboardView({ data }) {
 }
 
 function ChildrenView({ enrollments, payments, assignments }) {
+  const [activeChild, setActiveChild] = useState(null);
   const children = enrollments.reduce((map, enrollment) => {
     const student = enrollment.studentId;
     if (!student?._id) return map;
@@ -278,39 +359,118 @@ function ChildrenView({ enrollments, payments, assignments }) {
     return map;
   }, new Map());
 
+  useEffect(() => {
+    if (!activeChild) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [activeChild]);
+
   if (!children.size) return <Empty>No children linked to this account yet.</Empty>;
 
   return (
-    <section className="parent-child-grid">
-      {[...children.values()].map(({ student, enrollments: childEnrollments }) => {
-        const childPayments = payments.filter((item) => sameId(getId(item.studentId), student._id));
-        const openPayments = childPayments.filter((item) => item.status !== "paid").length;
-        const classIds = new Set(childEnrollments.map((item) => String(getId(item.classId))).filter(Boolean));
-        const childAssignments = assignments.filter((assignment) => classIds.has(String(getId(assignment.classId))));
+    <>
+      <section className="parent-child-grid">
+        {[...children.values()].map(({ student, enrollments: childEnrollments }) => {
+          const childPayments = payments.filter((item) => sameId(getId(item.studentId), student._id));
+          const openPayments = childPayments.filter((item) => item.status !== "paid").length;
+          const classIds = new Set(childEnrollments.map((item) => String(getId(item.classId))).filter(Boolean));
+          const childAssignments = assignments.filter((assignment) => classIds.has(String(getId(assignment.classId))));
+          const detail = { student, enrollments: childEnrollments, payments: childPayments, assignments: childAssignments };
 
-        return (
-          <article className="parent-child-card" key={student._id}>
-            <header>
-              <div className="parent-child-avatar">{shortName(student.fullName)}</div>
-              <div>
-                <h2>{student.fullName}</h2>
-                <p>{student.email}</p>
+          return (
+            <article className="parent-child-card" key={student._id}>
+              <header>
+                <div className="parent-child-avatar">{shortName(student.fullName)}</div>
+                <div>
+                  <h2>{student.fullName}</h2>
+                  <p>{student.email}</p>
+                </div>
+                <Badge>{childEnrollments.length} classes</Badge>
+              </header>
+              <div className="parent-child-meta">
+                <span><strong>Assignments</strong>{childAssignments.length}</span>
+                <span><strong>Open payments</strong>{openPayments}</span>
+                <span><strong>Paid</strong>{childPayments.filter((item) => item.status === "paid").length}</span>
               </div>
-              <Badge>{childEnrollments.length} classes</Badge>
-            </header>
-            <div className="parent-child-meta">
-              <span><strong>Assignments</strong>{childAssignments.length}</span>
-              <span><strong>Open payments</strong>{openPayments}</span>
-              <span><strong>Paid</strong>{childPayments.filter((item) => item.status === "paid").length}</span>
-            </div>
-            <div className="parent-child-classes">
-              {childEnrollments.map((enrollment) => <span key={enrollment._id}>{className(enrollment.classId)}</span>)}
-            </div>
-          </article>
-        );
-      })}
-    </section>
+              <button className="parent-child-button" type="button" onClick={() => setActiveChild(detail)}>
+                <Users size={16} />
+                View details
+              </button>
+            </article>
+          );
+        })}
+      </section>
+      <ChildDetailModal details={activeChild} onClose={() => setActiveChild(null)} />
+    </>
   );
+}
+
+function ChildDetailModal({ details, onClose }) {
+  if (!details) return null;
+  const openPayments = details.payments.filter((item) => item.status !== "paid").length;
+
+  return createPortal((
+    <div className="child-detail-modal" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="child-detail-card" role="dialog" aria-modal="true" aria-labelledby="childDetailTitle">
+        <header>
+          <div className="parent-child-avatar child-detail-avatar">{shortName(details.student.fullName)}</div>
+          <div>
+            <span>Child profile</span>
+            <h3 id="childDetailTitle">{details.student.fullName}</h3>
+            <p>{details.student.email}</p>
+          </div>
+          <button className="icon-button" type="button" aria-label="Close" onClick={onClose}><X size={18} /></button>
+        </header>
+        <div className="child-detail-metrics">
+          <span><strong>Classes</strong>{details.enrollments.length}</span>
+          <span><strong>Assignments</strong>{details.assignments.length}</span>
+          <span><strong>Open payments</strong>{openPayments}</span>
+          <span><strong>Paid</strong>{details.payments.filter((item) => item.status === "paid").length}</span>
+        </div>
+        <div className="child-detail-sections">
+          <section>
+            <h4>Classes</h4>
+            <div className="child-detail-list">
+              {details.enrollments.map((enrollment) => (
+                <article className="child-detail-row" key={enrollment._id}>
+                  <strong>{className(enrollment.classId)}</strong>
+                  <span>{enrollment.classId?.teacherId?.fullName || "No teacher"} - {enrollment.classId?.schedule || "No schedule"}</span>
+                </article>
+              ))}
+              {!details.enrollments.length && <Empty>No enrolled classes.</Empty>}
+            </div>
+          </section>
+          <section>
+            <h4>Assignments</h4>
+            <div className="child-detail-list">
+              {details.assignments.slice(0, 6).map((assignment) => (
+                <article className="child-detail-row" key={assignment._id}>
+                  <strong>{assignment.title}</strong>
+                  <span>{className(assignment.classId)} - due {dateKey(assignment.dueDate) || "N/A"}</span>
+                </article>
+              ))}
+              {!details.assignments.length && <Empty>No assignments found.</Empty>}
+            </div>
+          </section>
+          <section>
+            <h4>Payments</h4>
+            <div className="child-detail-list">
+              {details.payments.map((payment) => (
+                <article className="child-detail-row" key={payment._id}>
+                  <strong>{money(payment.amount)} VND</strong>
+                  <span>{className(payment.classId)} - {payment.status || "pending"}</span>
+                </article>
+              ))}
+              {!details.payments.length && <Empty>No payment records.</Empty>}
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+  ), document.body);
 }
 
 function ScheduleView({ data, scheduleMonth, setScheduleMonth }) {
@@ -458,18 +618,23 @@ function FeedbackView({ enrollments, feedbacks, onSubmit }) {
           Additional comment
           <textarea name="comment" placeholder="Write your note..." />
         </label>
-        <button className="small-button" type="submit">Send Feedback</button>
+        <button className="feedback-submit-button" type="submit">
+          <MessageSquare size={16} />
+          Send Feedback
+        </button>
       </form>
 
       <div className="feedback-history">
         <h2>Sent Feedback</h2>
-        {feedbacks.length ? feedbacks.map((item) => (
-          <article className="feedback-card" key={item._id}>
-            <strong>{className(item.classId)}</strong>
-            <p>{item.comment || "No comment"}</p>
-            <Badge>{item.authorRole || "parent"}</Badge>
-          </article>
-        )) : <Empty>No feedback sent yet.</Empty>}
+        <div className="feedback-list">
+          {feedbacks.length ? feedbacks.map((item) => (
+            <article className="feedback-card" key={item._id}>
+              <strong>{className(item.classId)}</strong>
+              <p>{item.comment || "No comment"}</p>
+              <Badge>{item.authorRole || "parent"}</Badge>
+            </article>
+          )) : <Empty>No feedback sent yet.</Empty>}
+        </div>
       </div>
     </section>
   );
@@ -523,32 +688,77 @@ function PaymentsView({ payments, onBankTransfer }) {
   );
 }
 
-function ProfileView({ user, data }) {
+function ProfileView({ user, data, preview, setPreview, isOpen, setOpen, onSubmit }) {
+  const avatar = preview || user.avatar || "";
+
+  const previewFile = async (event) => {
+    const nextPreview = await readImageFile(event.target.files?.[0]);
+    if (nextPreview) setPreview(nextPreview);
+  };
+
   return (
-    <article className="profile-card profile-showcase">
-      <div className="profile-cover" />
-      <div className="profile-summary">
-        <div className="profile-photo profile-photo-large">{user.avatar ? <img src={user.avatar} alt={user.fullName} /> : <span>{shortName(user.fullName)}</span>}</div>
-        <div className="profile-title">
-          <h3>{user.fullName}</h3>
-          <p>Parent Account</p>
-          <small>{user.caption || "No caption yet."}</small>
+    <>
+      <article className="profile-card profile-showcase">
+        <div className="profile-cover" />
+        <div className="profile-summary">
+          <div className="profile-photo profile-photo-large">{user.avatar ? <img src={user.avatar} alt={user.fullName} /> : <span>{shortName(user.fullName)}</span>}</div>
+          <div className="profile-title">
+            <h3>{user.fullName}</h3>
+            <p>Parent Account</p>
+            <small>{user.caption || "No caption yet."}</small>
+          </div>
+          <button className="ghost-button profile-edit-button" type="button" onClick={() => setOpen(true)}>
+            <PencilLine size={16} />
+            <span>Edit Profile</span>
+          </button>
         </div>
-      </div>
-      <div className="profile-info-grid">
-        <section>
-          <h4>Contact Information</h4>
-          <p><span>Email</span>{user.email}</p>
-          <p><span>Role</span>{user.role}</p>
-        </section>
-        <section>
-          <h4>Family Summary</h4>
-          <p><span>Children classes</span>{data.enrollments.length}</p>
-          <p><span>Feedback sent</span>{data.feedbacks.length}</p>
-          <p><span>Payments</span>{data.payments.length}</p>
-        </section>
-      </div>
-    </article>
+        <div className="profile-info-grid">
+          <section>
+            <h4>Contact Information</h4>
+            <p><span>Email</span>{user.email}</p>
+            <p><span>Role</span>{user.role}</p>
+          </section>
+          <section>
+            <h4>Family Summary</h4>
+            <p><span>Children classes</span>{data.enrollments.length}</p>
+            <p><span>Feedback sent</span>{data.feedbacks.length}</p>
+            <p><span>Payments</span>{data.payments.length}</p>
+          </section>
+        </div>
+      </article>
+
+      {isOpen && createPortal((
+        <div className="profile-modal" aria-hidden="false" onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
+          <form className="profile-form profile-edit-form" onSubmit={onSubmit}>
+            <div className="profile-modal-header">
+              <div>
+                <h3>Edit Profile</h3>
+                <p>Update your personal information.</p>
+              </div>
+              <button className="icon-button" type="button" aria-label="Close" onClick={() => setOpen(false)}>x</button>
+            </div>
+            <div className="profile-avatar-picker">
+              <label className="profile-avatar-preview" htmlFor="parentProfileAvatarInput">
+                <span>{avatar ? <img src={avatar} alt={user.fullName} /> : <span>{shortName(user.fullName)}</span>}</span>
+                <span className="profile-avatar-camera">Change photo</span>
+              </label>
+              <div>
+                <strong>Profile picture</strong>
+                <small>Choose an image to preview before saving.</small>
+              </div>
+            </div>
+            <input id="parentProfileAvatarInput" className="profile-file-input" name="avatar" type="file" accept="image/*" onChange={previewFile} />
+            <label>Full name<input name="fullName" defaultValue={user.fullName || ""} required /></label>
+            <label>Email<input name="email" type="email" defaultValue={user.email || ""} required /></label>
+            <label className="profile-wide">Caption<textarea name="caption" placeholder="Write something about yourself..." defaultValue={user.caption || ""} /></label>
+            <div className="profile-modal-actions">
+              <button className="ghost-button" type="button" onClick={() => setOpen(false)}>Cancel</button>
+              <button className="small-button" type="submit">Save Profile</button>
+            </div>
+          </form>
+        </div>
+      ), document.body)}
+    </>
   );
 }
 
@@ -582,8 +792,9 @@ function AttendanceModal({ details, onClose }) {
   );
 }
 
-function BankTransferModal({ payment, onClose, onCopy }) {
+function BankTransferModal({ payment, onClose, onCopy, onSubmitted }) {
   const code = paymentCode(payment);
+  const hasSubmittedTransfer = String(payment.note || "").includes("marked bank transfer as submitted");
 
   return (
     <div className="bank-transfer-modal" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -609,9 +820,19 @@ function BankTransferModal({ payment, onClose, onCopy }) {
           <div className="bank-transfer-code">
             <span>Transfer content</span>
             <strong>{code}</strong>
-            <button className="ghost-button" type="button" onClick={() => onCopy(code)}><Copy size={16} />Copy code</button>
+            <button className="bank-copy-button" type="button" onClick={() => onCopy(code)}><Copy size={16} />Copy code</button>
           </div>
-          <p className="bank-transfer-note">Please enter this exact transfer code in the bank transfer content.</p>
+          <div className="bank-transfer-actions">
+            <p className="bank-transfer-note">Please enter this exact transfer code in the bank transfer content.</p>
+            {hasSubmittedTransfer ? (
+              <span className="bank-transfer-submitted"><Check size={16} />Transfer submitted. Waiting for admin confirmation.</span>
+            ) : (
+              <button className="bank-transfer-submit-button" type="button" onClick={() => onSubmitted(payment)}>
+                <Check size={16} />
+                I have transferred
+              </button>
+            )}
+          </div>
         </div>
       </section>
     </div>

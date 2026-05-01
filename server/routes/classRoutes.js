@@ -1,9 +1,17 @@
 const express = require("express");
 const router = express.Router();
+const Assignment = require("../models/Assignment");
+const AssignmentSubmission = require("../models/AssignmentSubmission");
+const Attendance = require("../models/Attendance");
 const Class = require("../models/Class");
 const Course = require("../models/Course");
 const User = require("../models/User");
 const Enrollment = require("../models/Enrollment");
+const Feedback = require("../models/Feedback");
+const Material = require("../models/Material");
+const OnlineClassSession = require("../models/OnlineClassSession");
+const Payment = require("../models/Payment");
+const Schedule = require("../models/Schedule");
 
 const authMiddleware = require("../middleware/authMiddleware");
 const roleMiddleware = require("../middleware/roleMiddleware");
@@ -194,9 +202,32 @@ router.put("/:id", authMiddleware, roleMiddleware("admin"), async (req, res) => 
 // DELETE class (admin only)
 router.delete("/:id", authMiddleware, roleMiddleware("admin"), async (req, res) => {
   try {
-    const deletedClass = await Class.findByIdAndDelete(req.params.id);
+    const classItem = await Class.findById(req.params.id);
+    const classId = classItem?._id;
 
-    if (!deletedClass) {
+    if (classId) {
+      const [assignments, schedules] = await Promise.all([
+        Assignment.find({ classId }).select("_id"),
+        Schedule.find({ classId }).select("_id"),
+      ]);
+      const assignmentIds = assignments.map((item) => item._id);
+      const scheduleIds = schedules.map((item) => item._id);
+
+      await Promise.all([
+        AssignmentSubmission.deleteMany({ assignmentId: { $in: assignmentIds } }),
+        Assignment.deleteMany({ classId }),
+        Attendance.deleteMany({ scheduleId: { $in: scheduleIds } }),
+        Schedule.deleteMany({ classId }),
+        Enrollment.deleteMany({ classId }),
+        Feedback.deleteMany({ classId }),
+        Material.deleteMany({ classId }),
+        OnlineClassSession.deleteMany({ classId }),
+        Payment.deleteMany({ classId }),
+        Class.deleteOne({ _id: classId }),
+      ]);
+    }
+
+    if (!classItem) {
       return res.status(404).json({ message: "Không tìm thấy class" });
     }
 

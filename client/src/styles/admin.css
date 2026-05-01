@@ -1919,7 +1919,16 @@ textarea {
 .directory-card .danger-button {
   justify-self: start;
   min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 12px;
+}
+
+.directory-card .danger-button svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.6;
 }
 
 .class-capacity {
@@ -2679,10 +2688,13 @@ textarea {
   max-width: min(360px, calc(100vw - 32px));
   padding: 13px 16px;
   color: #ffffff;
+  text-align: left;
   font-weight: 800;
   background: #16a34a;
+  border: 0;
   border-radius: 12px;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.24);
+  cursor: pointer;
   opacity: 0;
   transform: translateY(-10px);
   transition: opacity 0.2s ease, transform 0.2s ease;

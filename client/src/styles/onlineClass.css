@@ -320,12 +320,17 @@
   padding: 18px;
 }
 
-.online-video-grid {
+.online-video-grid,
+.online-video-layout {
   min-height: 0;
   flex: 1;
   display: grid;
   grid-template-rows: minmax(220px, 1fr) auto;
   gap: 14px;
+}
+
+.online-video-layout {
+  grid-template-rows: minmax(360px, 1fr) auto;
 }
 
 .online-remote-grid {
@@ -347,8 +352,48 @@
   border-radius: 8px;
 }
 
-.online-video-tile.local {
+.online-video-tile.local,
+.online-video-tile.teacher-main {
   min-height: 320px;
+}
+
+.online-video-tile.teacher-main {
+  min-height: 360px;
+}
+
+.online-student-strip {
+  min-height: 132px;
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+.online-video-tile.student-thumb {
+  flex: 0 0 clamp(150px, 20vw, 220px);
+  min-height: 124px;
+  aspect-ratio: 16 / 9;
+}
+
+.online-student-empty,
+.online-video-placeholder {
+  display: grid;
+  place-items: center;
+  min-height: inherit;
+  padding: 18px;
+  color: #cbd5e1;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.online-student-empty {
+  flex: 1;
+  min-height: 124px;
+  background: rgba(15, 23, 42, 0.62);
+  border: 1px dashed rgba(203, 213, 225, 0.32);
+  border-radius: 8px;
 }
 
 .online-video-tile video {
@@ -437,6 +482,7 @@
 }
 
 .online-chat {
+  position: relative;
   border-bottom: 0 !important;
 }
 
@@ -464,6 +510,8 @@
 }
 
 .online-chat form {
+  position: relative;
+  z-index: 2;
   flex: 0 0 auto;
   display: grid;
   grid-template-columns: 1fr auto;
@@ -473,6 +521,8 @@
 }
 
 .online-chat input {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   min-height: 38px;
   padding: 0 12px;
@@ -520,5 +570,18 @@
 
   .online-video-tile.local {
     min-height: 220px;
+  }
+
+  .online-video-layout {
+    grid-template-rows: minmax(220px, 1fr) auto;
+  }
+
+  .online-video-tile.teacher-main {
+    min-height: 220px;
+  }
+
+  .online-video-tile.student-thumb {
+    flex-basis: 148px;
+    min-height: 96px;
   }
 }

@@ -1927,10 +1927,13 @@ input {
   max-width: min(360px, calc(100vw - 32px));
   padding: 13px 16px;
   color: #ffffff;
+  text-align: left;
   font-weight: 800;
   background: #16a34a;
+  border: 0;
   border-radius: 12px;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.24);
+  cursor: pointer;
   opacity: 0;
   transform: translateY(-10px);
   transition: opacity 0.2s ease, transform 0.2s ease;
@@ -2007,6 +2010,38 @@ input {
   min-height: 96px;
   padding-top: 10px;
   resize: vertical;
+}
+
+.feedback-submit-button {
+  width: 100%;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--green), #2563eb);
+  border: 0;
+  border-radius: 12px;
+  box-shadow:
+    0 14px 26px rgba(8, 191, 138, 0.22),
+    0 6px 14px rgba(37, 99, 235, 0.12);
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.feedback-submit-button:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 18px 34px rgba(8, 191, 138, 0.28),
+    0 8px 18px rgba(37, 99, 235, 0.16);
+}
+
+.feedback-submit-button svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.6;
 }
 
 .feedback-options {
@@ -2473,37 +2508,51 @@ input {
   padding-top: 50px;
 }
 
-.profile-edit-button {
+.profile-summary .profile-edit-button {
+  justify-self: end;
+  align-self: center;
   min-width: 150px;
-  min-height: 46px;
+  height: 46px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  padding: 0 18px;
   color: #ffffff;
   background:
     radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.24), transparent 28%),
-    linear-gradient(135deg, var(--green), #2563eb);
+    linear-gradient(135deg, var(--role-color), var(--role-color-dark));
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  cursor: pointer;
   box-shadow:
-    0 16px 34px rgba(6, 95, 70, 0.18),
-    0 8px 18px rgba(17, 24, 39, 0.08);
+    0 16px 32px rgba(15, 23, 42, 0.14),
+    0 8px 18px color-mix(in srgb, var(--role-color) 24%, transparent);
   transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 }
 
-.profile-edit-button svg {
-  width: 17px;
-  height: 17px;
+.profile-summary .profile-edit-button svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  stroke-width: 2.6;
 }
 
-.profile-edit-button:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.03);
+.profile-summary .profile-edit-button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
   box-shadow:
-    0 24px 46px rgba(6, 95, 70, 0.24),
-    0 12px 24px rgba(17, 24, 39, 0.1);
+    0 20px 38px rgba(15, 23, 42, 0.16),
+    0 10px 22px color-mix(in srgb, var(--role-color) 30%, transparent);
+}
+
+.profile-summary .profile-edit-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--role-color) 32%, transparent);
+  outline-offset: 3px;
 }
 
 .profile-info-grid {
@@ -2544,8 +2593,10 @@ input {
     padding-top: 0;
   }
 
-  .profile-edit-button {
+  .profile-summary .profile-edit-button {
     width: 100%;
+    justify-self: stretch;
+    align-self: stretch;
   }
 }
 
@@ -3092,16 +3143,84 @@ input {
   letter-spacing: 0;
 }
 
-.bank-transfer-code .ghost-button {
+.bank-transfer-code .bank-copy-button {
+  min-height: 40px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  padding: 0 14px;
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  box-shadow: 0 8px 18px rgba(8, 191, 138, 0.1);
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.bank-transfer-code .bank-copy-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(8, 191, 138, 0.42);
+  box-shadow: 0 14px 26px rgba(8, 191, 138, 0.16);
+}
+
+.bank-transfer-code .bank-copy-button svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.6;
 }
 
 .bank-transfer-note {
-  grid-column: 1 / -1;
   margin: 0;
   color: #475569;
+}
+
+.bank-transfer-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.bank-transfer-submit-button,
+.bank-transfer-submitted {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.bank-transfer-submit-button {
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--green), #2563eb);
+  border: 0;
+  box-shadow:
+    0 14px 26px rgba(8, 191, 138, 0.22),
+    0 6px 14px rgba(37, 99, 235, 0.12);
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.bank-transfer-submit-button:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 18px 34px rgba(8, 191, 138, 0.28),
+    0 8px 18px rgba(37, 99, 235, 0.16);
+}
+
+.bank-transfer-submitted {
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
 }
 
 @media (max-width: 720px) {
@@ -3123,8 +3242,14 @@ input {
   .parent-payment-card header,
   .parent-payment-meta,
   .bank-transfer-body,
-  .bank-transfer-code {
+  .bank-transfer-code,
+  .bank-transfer-actions {
     grid-template-columns: 1fr;
+  }
+
+  .bank-transfer-submit-button,
+  .bank-transfer-submitted {
+    width: 100%;
   }
 }
 
@@ -3210,4 +3335,543 @@ input {
 #scheduleView .calendar-more {
   padding: 3px 8px;
   font-size: 10px;
+}
+
+/* My Children: keep cards compact and move details into a popup. */
+.parent-child-grid {
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  align-items: start;
+}
+
+.parent-child-card {
+  min-height: 0;
+}
+
+.parent-child-card header {
+  align-items: flex-start;
+}
+
+.parent-child-card header > div:not(.parent-child-avatar) {
+  min-width: 0;
+}
+
+.parent-child-card h2,
+.parent-child-card p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.parent-child-card .badge {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.parent-child-button {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  justify-self: start;
+  min-height: 42px;
+  padding: 0 16px;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--green), #2563eb);
+  border: 0;
+  border-radius: 999px;
+  box-shadow:
+    0 14px 26px rgba(8, 191, 138, 0.22),
+    0 6px 14px rgba(37, 99, 235, 0.12);
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.parent-child-button:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 18px 34px rgba(8, 191, 138, 0.28),
+    0 8px 18px rgba(37, 99, 235, 0.16);
+}
+
+.parent-child-button svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.6;
+}
+
+.child-detail-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 5150;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(8px);
+}
+
+.child-detail-card {
+  width: min(920px, 100%);
+  max-height: min(86dvh, 760px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #bbf7d0;
+  border-radius: 18px;
+  box-shadow: 0 30px 84px rgba(15, 23, 42, 0.3);
+}
+
+.child-detail-card > header {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 22px;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.22), transparent 28%),
+    linear-gradient(135deg, var(--green), #2563eb);
+}
+
+.child-detail-avatar {
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.child-detail-card header span {
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  opacity: 0.82;
+}
+
+.child-detail-card h3 {
+  margin: 5px 0 3px;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.child-detail-card header p {
+  margin: 0;
+  opacity: 0.86;
+}
+
+.child-detail-card .icon-button {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 999px;
+}
+
+.child-detail-metrics {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px 22px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.child-detail-metrics span {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.child-detail-metrics strong {
+  color: #047857;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.child-detail-sections {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 1fr;
+  gap: 14px;
+  padding: 18px 22px 22px;
+  overflow: auto;
+  background: #f8fbff;
+}
+
+.child-detail-sections section {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+}
+
+.child-detail-sections h4 {
+  margin: 0;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.child-detail-list {
+  display: grid;
+  gap: 10px;
+}
+
+.child-detail-row {
+  display: grid;
+  gap: 5px;
+  padding: 11px 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.child-detail-row strong,
+.child-detail-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.child-detail-row strong {
+  color: #111827;
+}
+
+.child-detail-row span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+/* Dashboard family updates: prevent cramped/selected-looking rows. */
+#dashboardView .panel .family-update-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 68px;
+  padding: 12px 16px;
+}
+
+#dashboardView .family-update-row .list-row-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+#dashboardView .family-update-row strong,
+#dashboardView .family-update-row span {
+  min-width: 0;
+  background: transparent;
+  line-height: 1.25;
+}
+
+#dashboardView .family-update-row strong {
+  display: block;
+  overflow: hidden;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#dashboardView .family-update-row .list-row-main span {
+  display: block;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#dashboardView .family-update-row .badge {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+#dashboardView .family-update-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+
+#dashboardView .family-update-row-payment .family-update-icon {
+  background: linear-gradient(135deg, #f59e0b, #2563eb);
+}
+
+#dashboardView .family-update-row-feedback .family-update-icon {
+  background: linear-gradient(135deg, #8b5cf6, #2563eb);
+}
+
+@media (max-width: 860px) {
+  .child-detail-metrics,
+  .child-detail-sections {
+    grid-template-columns: 1fr;
+  }
+
+  .child-detail-card {
+    max-height: 88dvh;
+  }
+}
+
+@media (max-width: 640px) {
+  .child-detail-modal {
+    padding: 14px;
+  }
+
+  .child-detail-card > header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .child-detail-card .icon-button {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .parent-child-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .parent-child-button {
+    width: 100%;
+  }
+
+  #dashboardView .panel .family-update-row {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  #dashboardView .family-update-row .badge {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+/* The parent dashboard view has no #dashboardView id, so bind this fix to the actual dashboard grid. */
+.dashboard-grid .panel .family-update-row {
+  display: grid !important;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  justify-content: stretch;
+  gap: 14px;
+  min-height: 68px;
+  margin: 12px 16px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.dashboard-grid .family-update-row .list-row-main {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  text-align: left;
+}
+
+.dashboard-grid .family-update-row .list-row-main strong,
+.dashboard-grid .family-update-row .list-row-main span {
+  max-width: 100%;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-grid .family-update-row .badge {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .dashboard-grid .panel .family-update-row {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .dashboard-grid .family-update-row .badge {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+/* Dedicated Family Updates row. This avoids old .list-row flex rules entirely. */
+.dashboard-grid .family-update-card-row {
+  width: auto;
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 16px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.04);
+}
+
+.family-update-card-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  background: linear-gradient(135deg, #f59e0b, #2563eb);
+  border-radius: 12px;
+}
+
+.family-update-card-row-feedback .family-update-card-icon {
+  background: linear-gradient(135deg, #8b5cf6, #2563eb);
+}
+
+.family-update-card-main {
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  text-align: left;
+}
+
+.family-update-card-main strong,
+.family-update-card-main span {
+  max-width: 100%;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.family-update-card-main strong {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.family-update-card-main span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.family-update-card-row .badge {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .dashboard-grid .family-update-card-row {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .family-update-card-row .badge {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+/* Profile modal is portaled to body so it must own the viewport and scroll safely. */
+.profile-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 5200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(8px);
+}
+
+.profile-modal .profile-edit-form {
+  width: min(620px, 100%);
+  max-height: calc(100dvh - 48px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  overflow: auto;
+}
+
+.profile-modal-actions {
+  position: sticky;
+  bottom: -22px;
+  margin: 0 -22px -22px;
+  padding: 14px 22px 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), #ffffff 28%);
+}
+
+@media (max-width: 640px) {
+  .profile-modal {
+    place-items: end center;
+    padding: 12px;
+  }
+
+  .profile-modal .profile-edit-form {
+    grid-template-columns: 1fr;
+    max-height: calc(100dvh - 24px);
+  }
+
+  .profile-modal-actions {
+    flex-direction: column-reverse;
+  }
+}
+
+/* Feedback history cards should be separated, not stacked edge-to-edge. */
+.feedback-history {
+  overflow: hidden;
+}
+
+.feedback-history .feedback-list {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.feedback-history .feedback-card {
+  margin: 0;
+  border-left: 5px solid var(--green);
+  border-radius: 14px;
+  box-shadow: 0 10px 22px rgba(17, 24, 39, 0.06);
+}
+
+/* Topbar avatar must crop uploaded profile photos consistently. */
+.parent-topbar .avatar {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  min-width: 48px;
+  max-width: 48px;
+  min-height: 48px;
+  max-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 999px;
+  line-height: 1;
+}
+
+.parent-topbar .avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  border-radius: inherit;
 }
