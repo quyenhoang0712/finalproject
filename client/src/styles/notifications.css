@@ -1,0 +1,87 @@
+.topbar-notification-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.topbar-actions-spacer {
+  flex: 1 1 auto;
+}
+
+.topbar-notification-wrap .announcement-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: auto;
+  right: 0;
+  z-index: 120;
+}
+
+.topbar-notification-wrap .announcement-popover::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  right: 16px;
+  width: 14px;
+  height: 14px;
+  background: #ffffff;
+  border-left: 1px solid #e5e7eb;
+  border-top: 1px solid #e5e7eb;
+  transform: rotate(45deg);
+}
+
+.announcement-item strong,
+.announcement-item p {
+  overflow-wrap: anywhere;
+}
+
+.announcement-popover-header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.announcement-read-all,
+.announcement-item-top button {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  color: var(--role-color-dark, #1d4ed8);
+  background: #ffffff;
+  border: 1px solid var(--role-line, #dbeafe);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.announcement-read-all:hover,
+.announcement-item-top button:hover {
+  color: #ffffff;
+  background: var(--role-color, #2563eb);
+}
+
+.announcement-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.announcement-item-top span {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .topbar-notification-wrap .announcement-popover {
+    position: fixed;
+    top: 58px;
+    left: 14px;
+    right: 14px;
+    width: auto;
+  }
+
+  .topbar-notification-wrap .announcement-popover::before {
+    right: 70px;
+  }
+}

@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "../api/client";
+import { NotificationBell } from "../components/notifications/NotificationBell";
 import { OnlineClass } from "../components/online-class/OnlineClass";
 import { dateKey } from "../utils/date";
 import "../styles/student.css";
@@ -109,6 +110,70 @@ function Status({ text }) {
 
 function SuccessToast({ text, onDismiss }) {
   return null;
+}
+
+const compareScheduleTime = (left, right) =>
+  `${dateKey(left.date)} ${left.startTime || ""}`.localeCompare(`${dateKey(right.date)} ${right.startTime || ""}`);
+
+function buildStudentNotifications(data) {
+  const today = dateKey(new Date());
+  const schedules = [...data.schedules].filter((item) => dateKey(item.date)).sort(compareScheduleTime);
+  const todaySchedules = schedules.filter((item) => dateKey(item.date) === today);
+  const upcomingSchedules = schedules.filter((item) => dateKey(item.date) > today).slice(0, 3);
+  const pendingAssignments = data.assignments.filter((item) => !item.submission);
+  const dueAssignments = [...pendingAssignments]
+    .filter((item) => !dateKey(item.dueDate) || dateKey(item.dueDate) >= today)
+    .sort((left, right) => dateKey(left.dueDate).localeCompare(dateKey(right.dueDate)));
+
+  const notifications = todaySchedules.slice(0, 3).map((item) => ({
+    id: `student-today-${item._id}`,
+    label: "Schedule",
+    title: `Class today: ${className(item.classId)}`,
+    message: `${item.startTime || "--:--"} - ${item.endTime || "--:--"} at ${item.room || "No room"}.`,
+    time: dateKey(item.date),
+  }));
+
+  upcomingSchedules.forEach((item) => {
+    notifications.push({
+      id: `student-upcoming-${item._id}`,
+      label: "Upcoming",
+      title: className(item.classId),
+      message: `${dateKey(item.date)} ${item.startTime || "--:--"} - ${item.endTime || "--:--"} at ${item.room || "No room"}.`,
+      time: dateKey(item.date),
+    });
+  });
+
+  if (data.enrollments.length) {
+    notifications.push({
+      id: `student-classes-${data.enrollments.length}`,
+      label: "Classes",
+      title: `${data.enrollments.length} enrolled classes`,
+      message: "Open My Classes to review teachers, schedule, and class details.",
+    });
+  }
+
+  if (pendingAssignments.length) {
+    const nextDue = dueAssignments[0];
+    notifications.push({
+      id: `student-assignments-${pendingAssignments.length}-${nextDue?._id || "none"}`,
+      label: "Assignments",
+      title: `${pendingAssignments.length} pending assignments`,
+      message: nextDue
+        ? `${nextDue.title} is due ${dateKey(nextDue.dueDate) || "soon"}.`
+        : "Check Assignments for coursework that still needs submission.",
+    });
+  }
+
+  data.materials.slice(0, 2).forEach((item) => {
+    notifications.push({
+      id: `student-material-${item._id}`,
+      label: "Material",
+      title: item.title || "New class material",
+      message: `${className(item.classId)} - ${item.fileName || "Resource file"}.`,
+    });
+  });
+
+  return notifications;
 }
 
 function Badge({ children }) {
@@ -227,6 +292,13 @@ export function StudentDashboard({ user, onLogout }) {
         email: String(form.get("email") || "").trim(),
         caption: String(form.get("caption") || "").trim(),
       };
+      const password = String(form.get("password") || "");
+      const confirmPassword = String(form.get("confirmPassword") || "");
+      if (password || confirmPassword) {
+        if (password.length < 6) throw new Error("Password must be at least 6 characters.");
+        if (password !== confirmPassword) throw new Error("Password confirmation does not match.");
+        payload.password = password;
+      }
       if (avatar) payload.avatar = avatar;
       const updated = await api(`/api/users/${currentUser._id}`, {
         method: "PUT",
@@ -253,6 +325,7 @@ export function StudentDashboard({ user, onLogout }) {
     }
   };
 
+  const notificationItems = useMemo(() => buildStudentNotifications(data), [data]);
   const [title, subtitle] = useMemo(() => viewMeta[view] || viewMeta.dashboard, [view]);
 
   return (
@@ -265,7 +338,9 @@ export function StudentDashboard({ user, onLogout }) {
             <span>{currentUser.fullName}</span>
           </div>
         </div>
+        <div className="topbar-actions-spacer" />
         <button className="logout-button" type="button" onClick={onLogout}>Logout</button>
+        <NotificationBell role="student" userId={currentUser._id} items={notificationItems} />
         <div className="avatar">{currentUser.avatar ? <img src={currentUser.avatar} alt={currentUser.fullName} /> : shortName(currentUser.fullName)}</div>
       </header>
 
@@ -919,7 +994,7 @@ function ProfileView({ user, data, preview, setPreview, isOpen, setOpen, onSubmi
             <div className="profile-modal-header">
               <div>
                 <h3>Edit Profile</h3>
-                <p>Update your personal information.</p>
+                <p>Update your personal information and password.</p>
               </div>
               <button className="icon-button" type="button" aria-label="Close" onClick={() => setOpen(false)}>x</button>
             </div>
@@ -936,6 +1011,8 @@ function ProfileView({ user, data, preview, setPreview, isOpen, setOpen, onSubmi
             <input id="studentProfileAvatarInput" className="profile-file-input" name="avatar" type="file" accept="image/*" onChange={previewFile} />
             <label>Full name<input name="fullName" defaultValue={user.fullName || ""} required /></label>
             <label>Email<input name="email" type="email" defaultValue={user.email || ""} required /></label>
+            <label>New password<input name="password" type="password" placeholder="Leave blank to keep current password" autoComplete="new-password" /></label>
+            <label>Confirm password<input name="confirmPassword" type="password" placeholder="Repeat new password" autoComplete="new-password" /></label>
             <label className="profile-wide">Caption<textarea name="caption" placeholder="Write something about yourself..." defaultValue={user.caption || ""} /></label>
             <div className="profile-modal-actions">
               <button className="ghost-button" type="button" onClick={() => setOpen(false)}>Cancel</button>

@@ -8,6 +8,20 @@ const Class = require("../models/Class");
 const authMiddleware = require("../middleware/authMiddleware");
 const roleMiddleware = require("../middleware/roleMiddleware");
 
+const isActiveEnrollment = (status) => status !== "cancelled";
+
+const populateEnrollment = (query) =>
+  query
+    .populate("studentId", "fullName email role avatar caption")
+    .populate("parentId", "fullName email role avatar caption")
+    .populate({
+      path: "classId",
+      populate: [
+        { path: "courseId", select: "title subject mode" },
+        { path: "teacherId", select: "fullName email role avatar caption" },
+      ],
+    });
+
 const canViewEnrollment = (enrollment, user) => {
   if (user.role === "admin") return true;
   if (String(enrollment.studentId?._id || enrollment.studentId) === String(user.userId)) return true;
@@ -25,17 +39,7 @@ router.get("/", authMiddleware, roleMiddleware("admin", "teacher"), async (req, 
       query = query.find({ classId: { $in: myClasses.map((item) => item._id) } });
     }
 
-    const enrollments = await query
-      .populate("studentId", "fullName email role avatar caption")
-      .populate("parentId", "fullName email role avatar caption")
-      .populate({
-        path: "classId",
-        populate: [
-          { path: "courseId", select: "title subject mode" },
-          { path: "teacherId", select: "fullName email role avatar caption" },
-        ],
-      });
-
+    const enrollments = await populateEnrollment(query);
     res.status(200).json(enrollments);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -45,19 +49,10 @@ router.get("/", authMiddleware, roleMiddleware("admin", "teacher"), async (req, 
 // GET enrollment by id
 router.get("/:id", authMiddleware, async (req, res) => {
   try {
-    const enrollment = await Enrollment.findById(req.params.id)
-      .populate("studentId", "fullName email role avatar caption")
-      .populate("parentId", "fullName email role avatar caption")
-      .populate({
-        path: "classId",
-        populate: [
-          { path: "courseId", select: "title subject mode" },
-          { path: "teacherId", select: "fullName email role avatar caption" },
-        ],
-      });
+    const enrollment = await populateEnrollment(Enrollment.findById(req.params.id));
 
     if (!enrollment) {
-      return res.status(404).json({ message: "Không tìm thấy enrollment" });
+      return res.status(404).json({ message: "Enrollment not found" });
     }
 
     if (!canViewEnrollment(enrollment, req.user)) {
@@ -76,41 +71,42 @@ router.post("/", authMiddleware, roleMiddleware("admin"), async (req, res) => {
     const { studentId, classId, parentId, status, paymentStatus } = req.body;
 
     if (!studentId || !classId) {
-      return res.status(400).json({ message: "Thiếu studentId hoặc classId" });
+      return res.status(400).json({ message: "studentId and classId are required" });
     }
 
     const student = await User.findById(studentId);
     if (!student) {
-      return res.status(404).json({ message: "Không tìm thấy student" });
+      return res.status(404).json({ message: "Student not found" });
     }
 
     if (student.role !== "student") {
-      return res.status(400).json({ message: "User được chọn không phải student" });
+      return res.status(400).json({ message: "Selected user is not a student" });
     }
 
     const classItem = await Class.findById(classId);
     if (!classItem) {
-      return res.status(404).json({ message: "Không tìm thấy class" });
+      return res.status(404).json({ message: "Class not found" });
     }
 
     if (parentId) {
       const parent = await User.findById(parentId);
       if (!parent) {
-        return res.status(404).json({ message: "Không tìm thấy parent" });
+        return res.status(404).json({ message: "Parent not found" });
       }
 
       if (parent.role !== "parent") {
-        return res.status(400).json({ message: "User được chọn không phải parent" });
+        return res.status(400).json({ message: "Selected user is not a parent" });
       }
     }
 
     const existingEnrollment = await Enrollment.findOne({ studentId, classId });
     if (existingEnrollment) {
-      return res.status(400).json({ message: "Student đã đăng ký class này rồi" });
+      return res.status(400).json({ message: "Student is already enrolled in this class" });
     }
 
-    if (classItem.currentStudents >= classItem.capacity) {
-      return res.status(400).json({ message: "Class đã đầy" });
+    const nextStatus = status || "pending";
+    if (isActiveEnrollment(nextStatus) && classItem.currentStudents >= classItem.capacity) {
+      return res.status(400).json({ message: "Class is full" });
     }
 
     const newEnrollment = new Enrollment({
@@ -123,8 +119,10 @@ router.post("/", authMiddleware, roleMiddleware("admin"), async (req, res) => {
 
     const savedEnrollment = await newEnrollment.save();
 
-    classItem.currentStudents += 1;
-    await classItem.save();
+    if (isActiveEnrollment(nextStatus)) {
+      classItem.currentStudents += 1;
+      await classItem.save();
+    }
 
     res.status(201).json(savedEnrollment);
   } catch (err) {
@@ -136,60 +134,92 @@ router.post("/", authMiddleware, roleMiddleware("admin"), async (req, res) => {
 router.put("/:id", authMiddleware, roleMiddleware("admin"), async (req, res) => {
   try {
     const { studentId, classId, parentId, status, paymentStatus } = req.body;
+    const enrollment = await Enrollment.findById(req.params.id);
+
+    if (!enrollment) {
+      return res.status(404).json({ message: "Enrollment not found" });
+    }
 
     if (studentId) {
       const student = await User.findById(studentId);
       if (!student) {
-        return res.status(404).json({ message: "Không tìm thấy student" });
+        return res.status(404).json({ message: "Student not found" });
       }
       if (student.role !== "student") {
-        return res.status(400).json({ message: "User được chọn không phải student" });
-      }
-    }
-
-    if (classId) {
-      const classItem = await Class.findById(classId);
-      if (!classItem) {
-        return res.status(404).json({ message: "Không tìm thấy class" });
+        return res.status(400).json({ message: "Selected user is not a student" });
       }
     }
 
     if (parentId) {
       const parent = await User.findById(parentId);
       if (!parent) {
-        return res.status(404).json({ message: "Không tìm thấy parent" });
+        return res.status(404).json({ message: "Parent not found" });
       }
       if (parent.role !== "parent") {
-        return res.status(400).json({ message: "User được chọn không phải parent" });
+        return res.status(400).json({ message: "Selected user is not a parent" });
       }
     }
 
-    const updateData = {};
-    if (studentId) updateData.studentId = studentId;
-    if (classId) updateData.classId = classId;
-    if (parentId !== undefined) updateData.parentId = parentId;
-    if (status) updateData.status = status;
-    if (paymentStatus) updateData.paymentStatus = paymentStatus;
+    const nextStudentId = studentId || enrollment.studentId;
+    const nextClassId = classId || enrollment.classId;
+    const nextStatus = status || enrollment.status;
+    const oldClassId = String(enrollment.classId);
+    const newClassId = String(nextClassId);
+    const wasActive = isActiveEnrollment(enrollment.status);
+    const willBeActive = isActiveEnrollment(nextStatus);
 
-    const updatedEnrollment = await Enrollment.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    )
-      .populate("studentId", "fullName email role avatar caption")
-      .populate("parentId", "fullName email role avatar caption")
-      .populate({
-        path: "classId",
-        populate: [
-          { path: "courseId", select: "title subject mode" },
-          { path: "teacherId", select: "fullName email role avatar caption" },
-        ],
-      });
-
-    if (!updatedEnrollment) {
-      return res.status(404).json({ message: "Không tìm thấy enrollment" });
+    let targetClass = null;
+    if (classId || (willBeActive && (!wasActive || oldClassId !== newClassId))) {
+      targetClass = await Class.findById(nextClassId);
+      if (!targetClass) {
+        return res.status(404).json({ message: "Class not found" });
+      }
     }
 
+    const existingEnrollment = await Enrollment.findOne({
+      _id: { $ne: enrollment._id },
+      studentId: nextStudentId,
+      classId: nextClassId,
+    });
+    if (existingEnrollment) {
+      return res.status(400).json({ message: "Student is already enrolled in this class" });
+    }
+
+    if (willBeActive && (!wasActive || oldClassId !== newClassId)) {
+      const classToIncrement = targetClass || await Class.findById(nextClassId);
+      if (!classToIncrement) {
+        return res.status(404).json({ message: "Class not found" });
+      }
+      if (classToIncrement.currentStudents >= classToIncrement.capacity) {
+        return res.status(400).json({ message: "Class is full" });
+      }
+    }
+
+    if (studentId) enrollment.studentId = studentId;
+    if (classId) enrollment.classId = classId;
+    if (parentId !== undefined) enrollment.parentId = parentId || null;
+    if (status) enrollment.status = status;
+    if (paymentStatus) enrollment.paymentStatus = paymentStatus;
+
+    await enrollment.save();
+
+    if (wasActive && (!willBeActive || oldClassId !== newClassId)) {
+      const oldClass = await Class.findById(oldClassId);
+      if (oldClass && oldClass.currentStudents > 0) {
+        oldClass.currentStudents -= 1;
+        await oldClass.save();
+      }
+    }
+
+    if (willBeActive && (!wasActive || oldClassId !== newClassId)) {
+      const classToIncrement = targetClass || await Class.findById(nextClassId);
+      if (classToIncrement) {
+        classToIncrement.currentStudents += 1;
+        await classToIncrement.save();
+      }
+    }
+
+    const updatedEnrollment = await populateEnrollment(Enrollment.findById(req.params.id));
     res.status(200).json(updatedEnrollment);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -202,18 +232,20 @@ router.delete("/:id", authMiddleware, roleMiddleware("admin"), async (req, res) 
     const deletedEnrollment = await Enrollment.findById(req.params.id);
 
     if (!deletedEnrollment) {
-      return res.status(404).json({ message: "Không tìm thấy enrollment" });
+      return res.status(404).json({ message: "Enrollment not found" });
     }
 
-    const classItem = await Class.findById(deletedEnrollment.classId);
-    if (classItem && classItem.currentStudents > 0) {
-      classItem.currentStudents -= 1;
-      await classItem.save();
+    if (isActiveEnrollment(deletedEnrollment.status)) {
+      const classItem = await Class.findById(deletedEnrollment.classId);
+      if (classItem && classItem.currentStudents > 0) {
+        classItem.currentStudents -= 1;
+        await classItem.save();
+      }
     }
 
     await Enrollment.findByIdAndDelete(req.params.id);
 
-    res.status(200).json({ message: "Xóa enrollment thành công" });
+    res.status(200).json({ message: "Enrollment deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

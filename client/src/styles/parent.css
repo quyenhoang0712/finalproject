@@ -3875,3 +3875,15 @@ input {
   object-fit: cover;
   border-radius: inherit;
 }
+
+/* Keep the profile action aligned with the text row instead of the cover edge. */
+.profile-summary .profile-edit-button {
+  align-self: end;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 760px) {
+  .profile-summary .profile-edit-button {
+    margin-bottom: 0;
+  }
+}

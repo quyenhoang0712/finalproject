@@ -1965,6 +1965,374 @@ textarea {
   background: linear-gradient(90deg, #10b981, #2563eb);
 }
 
+.class-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.directory-card .small-button {
+  justify-self: start;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+}
+
+.class-detail-overlay {
+  z-index: 90;
+}
+
+.class-detail-card {
+  width: min(980px, calc(100vw - 32px));
+  max-height: min(88vh, 760px);
+  overflow: hidden;
+  border: 0;
+  border-radius: 18px;
+  box-shadow:
+    0 30px 90px rgba(15, 23, 42, 0.32),
+    0 12px 26px rgba(17, 24, 39, 0.12);
+}
+
+.class-detail-card .class-detail-header {
+  align-items: center;
+  padding: 22px 24px;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 16% 12%, rgba(255, 255, 255, 0.28), transparent 28%),
+    linear-gradient(135deg, #10b981 0%, #2563eb 62%, #7c3aed 100%);
+  border-bottom: 0;
+}
+
+.class-detail-header > div > span {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.class-detail-header h3 {
+  color: #ffffff;
+  font-size: 22px;
+}
+
+.class-detail-header p {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.class-detail-header .icon-button {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+}
+
+.class-detail-header .icon-button:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.class-detail-body {
+  display: grid;
+  gap: 14px;
+  max-height: calc(min(88vh, 760px) - 92px);
+  overflow: auto;
+  padding: 16px;
+  background:
+    linear-gradient(180deg, #f8fbff 0%, #f1f5f9 100%);
+}
+
+.class-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.class-detail-summary div,
+.class-add-student-form,
+.class-roster-panel {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+}
+
+.class-detail-summary div {
+  display: grid;
+  gap: 5px;
+  min-height: 64px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.04);
+}
+
+.class-detail-summary strong,
+.class-add-student-form label {
+  color: #059669;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.class-detail-summary span {
+  overflow: hidden;
+  color: #334155;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.class-detail-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.78fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.class-roster-panel {
+  overflow: hidden;
+  min-height: 430px;
+}
+
+.class-roster-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.class-roster-panel h4,
+.class-add-student-form h4 {
+  margin: 0;
+  color: #111827;
+  font-size: 16px;
+}
+
+.class-roster-panel p,
+.class-add-student-form p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.class-roster-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.class-roster-list::-webkit-scrollbar,
+.class-detail-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.class-roster-list::-webkit-scrollbar-thumb,
+.class-detail-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+.class-roster-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 13px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.04);
+}
+
+.class-roster-avatar {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  background: linear-gradient(135deg, #10b981, #2563eb);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.class-roster-row strong,
+.class-roster-row span,
+.class-roster-row small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.class-roster-row strong {
+  color: #111827;
+}
+
+.class-roster-row span,
+.class-roster-row small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.class-roster-controls {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.class-roster-badges,
+.class-roster-actions,
+.class-edit-enrollment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.class-roster-badges .badge {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+}
+
+.class-roster-actions button {
+  min-height: 28px;
+  padding: 0 10px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.class-roster-actions button:hover {
+  background: #dbeafe;
+}
+
+.class-roster-actions button.danger {
+  color: #b91c1c;
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+
+.class-roster-actions button.danger:hover {
+  background: #ffe4e6;
+}
+
+.class-add-student-form {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-top: 4px solid #10b981;
+  box-shadow: 0 16px 34px rgba(17, 24, 39, 0.08);
+}
+
+.class-add-student-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.class-add-student-form select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  color: #111827;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  outline: none;
+}
+
+.class-add-student-form select:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
+}
+
+.class-add-student-form select:disabled,
+.class-add-student-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.class-add-student-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.class-add-note {
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+}
+
+.class-add-student-form > .small-button {
+  min-height: 44px;
+  margin-top: 2px;
+  background: linear-gradient(135deg, #10b981, #2563eb);
+  border-radius: 10px;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
+}
+
+.class-edit-enrollment-form {
+  border-top-color: #2563eb;
+}
+
+.class-edit-enrollment-actions {
+  justify-content: stretch;
+}
+
+.class-edit-enrollment-actions button {
+  flex: 1 1 0;
+}
+
+@media (max-width: 900px) {
+  .class-detail-main,
+  .class-add-student-row {
+    grid-template-columns: 1fr;
+  }
+
+  .class-detail-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .class-roster-panel {
+    min-height: 0;
+  }
+
+  .class-roster-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .class-roster-controls,
+  .class-roster-badges,
+  .class-roster-actions {
+    grid-column: 1 / -1;
+    justify-items: start;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .class-detail-card {
+    width: calc(100vw - 20px);
+  }
+
+  .class-detail-body {
+    padding: 12px;
+  }
+
+  .class-detail-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
 .report-hero {
   display: flex;
   align-items: center;
@@ -2776,6 +3144,19 @@ textarea {
   border-radius: 12px;
 }
 
+.schedule-editor-card {
+  width: min(640px, calc(100vw - 32px));
+}
+
+.schedule-editor-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.schedule-editor-form .modal-wide,
+.schedule-editor-form .modal-actions {
+  grid-column: 1 / -1;
+}
+
 .calendar-summary {
   min-width: 130px;
   padding: 10px 14px;
@@ -2840,6 +3221,12 @@ textarea {
   margin-bottom: 8px;
 }
 
+.calendar-day-top > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .calendar-day-top span {
   color: #6b7280;
   font-size: 11px;
@@ -2849,6 +3236,25 @@ textarea {
 
 .calendar-day-top strong {
   color: #111827;
+}
+
+.calendar-day-add {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: #2563eb;
+  background: #ffffff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.calendar-day-add:hover {
+  background: #dbeafe;
 }
 
 .calendar-events {
@@ -2899,6 +3305,49 @@ textarea {
   font-weight: 700;
 }
 
+.calendar-event-actions,
+.schedule-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.calendar-event-actions button,
+.schedule-row-actions button {
+  min-height: 24px;
+  padding: 0 8px;
+  color: #1d4ed8;
+  background: #ffffff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.calendar-event-actions button:hover,
+.schedule-row-actions button:hover {
+  background: #dbeafe;
+}
+
+.calendar-event-actions button.danger,
+.schedule-row-actions button.danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.calendar-event-actions button.danger:hover,
+.schedule-row-actions button.danger:hover {
+  background: #fee2e2;
+}
+
+.schedule-row-actions {
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
 .admin-schedule-side {
   display: grid;
   gap: 18px;
@@ -2930,7 +3379,12 @@ textarea {
 
   .calendar-actions {
     width: 100%;
+    flex-wrap: wrap;
     margin-left: 0;
+  }
+
+  .calendar-actions .small-button {
+    flex: 1 1 auto;
   }
 
   .calendar-summary {
@@ -2949,6 +3403,14 @@ textarea {
   .calendar-day {
     min-height: auto;
     border-right: 0;
+  }
+
+  .schedule-editor-form {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-row-actions {
+    justify-content: flex-start;
   }
 
   .calendar-day.muted:empty {
@@ -3172,6 +3634,28 @@ textarea {
   max-width: 580px;
   margin: 0;
   color: rgba(255, 255, 255, 0.88);
+}
+
+.payment-task-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.payment-create-button {
+  min-height: 44px;
+  padding: 0 16px;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.14);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.payment-create-button:hover {
+  background: #f8fafc;
 }
 
 .payment-task-total {
@@ -3400,6 +3884,40 @@ textarea {
   font-size: 20px;
 }
 
+.payment-create-context {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.payment-create-context span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.payment-create-context strong {
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.payment-create-context p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #64748b;
+}
+
 .payment-modal-table {
   overflow: auto;
   background: #ffffff;
@@ -3577,12 +4095,23 @@ textarea {
     flex-direction: column;
   }
 
+  .payment-task-actions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .payment-create-button {
+    width: 100%;
+  }
+
   .payment-task-total {
     width: 100%;
   }
 
   .money-task-split,
-  .payment-modal-summary {
+  .payment-modal-summary,
+  .payment-create-context {
     grid-template-columns: 1fr;
   }
 

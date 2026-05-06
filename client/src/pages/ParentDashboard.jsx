@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "../api/client";
+import { NotificationBell } from "../components/notifications/NotificationBell";
 import { OnlineClass } from "../components/online-class/OnlineClass";
 import { dateKey } from "../utils/date";
 import "../styles/parent.css";
@@ -91,6 +92,76 @@ function Status({ text }) {
 
 function SuccessToast({ text, onDismiss }) {
   return null;
+}
+
+const compareScheduleTime = (left, right) =>
+  `${dateKey(left.date)} ${left.startTime || ""}`.localeCompare(`${dateKey(right.date)} ${right.startTime || ""}`);
+
+function buildParentNotifications(data) {
+  const today = dateKey(new Date());
+  const schedules = [...data.schedules].filter((item) => dateKey(item.date)).sort(compareScheduleTime);
+  const todaySchedules = schedules.filter((item) => dateKey(item.date) === today);
+  const upcomingSchedules = schedules.filter((item) => dateKey(item.date) > today).slice(0, 3);
+  const childNamesForClass = (classId) =>
+    data.enrollments
+      .filter((item) => sameId(getId(item.classId), getId(classId)))
+      .map((item) => item.studentId?.fullName)
+      .filter(Boolean)
+      .join(", ") || "Child";
+  const openPayments = data.payments.filter((item) => item.status !== "paid");
+  const attendanceNotes = data.attendances.filter((item) => ["absent", "late"].includes(item.status));
+  const dueAssignments = [...data.assignments]
+    .filter((item) => !dateKey(item.dueDate) || dateKey(item.dueDate) >= today)
+    .sort((left, right) => dateKey(left.dueDate).localeCompare(dateKey(right.dueDate)));
+
+  const notifications = todaySchedules.slice(0, 3).map((item) => ({
+    id: `parent-today-${item._id}`,
+    label: "Schedule",
+    title: `Child class today: ${className(item.classId)}`,
+    message: `${childNamesForClass(item.classId)} - ${item.startTime || "--:--"} to ${item.endTime || "--:--"} at ${item.room || "No room"}.`,
+    time: dateKey(item.date),
+  }));
+
+  upcomingSchedules.forEach((item) => {
+    notifications.push({
+      id: `parent-upcoming-${item._id}`,
+      label: "Upcoming",
+      title: className(item.classId),
+      message: `${childNamesForClass(item.classId)} - ${dateKey(item.date)} ${item.startTime || "--:--"} at ${item.room || "No room"}.`,
+      time: dateKey(item.date),
+    });
+  });
+
+  if (openPayments.length) {
+    const firstPayment = openPayments[0];
+    notifications.push({
+      id: `parent-payments-${openPayments.length}-${firstPayment?._id || "none"}`,
+      label: "Payment",
+      title: `${openPayments.length} open payments`,
+      message: `${className(firstPayment.classId)} - ${money(firstPayment.amount)} VND is waiting for payment.`,
+    });
+  }
+
+  attendanceNotes.slice(0, 2).forEach((item) => {
+    notifications.push({
+      id: `parent-attendance-${item._id}`,
+      label: "Attendance",
+      title: `${item.studentId?.fullName || "Child"} was marked ${item.status}`,
+      message: `${className(item.scheduleId?.classId)} on ${dateKey(item.scheduleId?.date || item.createdAt)}.`,
+      time: dateKey(item.scheduleId?.date || item.createdAt),
+    });
+  });
+
+  if (dueAssignments.length) {
+    notifications.push({
+      id: `parent-assignments-${dueAssignments.length}-${dueAssignments[0]?._id || "none"}`,
+      label: "Assignments",
+      title: `${dueAssignments.length} assignments to watch`,
+      message: `${dueAssignments[0].title || "Assignment"} is due ${dateKey(dueAssignments[0].dueDate) || "soon"}.`,
+    });
+  }
+
+  return notifications;
 }
 
 function Badge({ children }) {
@@ -176,6 +247,13 @@ export function ParentDashboard({ user, onLogout }) {
         email: String(form.get("email") || "").trim(),
         caption: String(form.get("caption") || "").trim(),
       };
+      const password = String(form.get("password") || "");
+      const confirmPassword = String(form.get("confirmPassword") || "");
+      if (password || confirmPassword) {
+        if (password.length < 6) throw new Error("Password must be at least 6 characters.");
+        if (password !== confirmPassword) throw new Error("Password confirmation does not match.");
+        payload.password = password;
+      }
       if (avatar) payload.avatar = avatar;
       const updated = await api(`/api/users/${currentUser._id}`, {
         method: "PUT",
@@ -229,6 +307,7 @@ export function ParentDashboard({ user, onLogout }) {
     }
   };
 
+  const notificationItems = useMemo(() => buildParentNotifications(data), [data]);
   const [title, subtitle] = useMemo(() => viewMeta[view] || viewMeta.dashboard, [view]);
 
   return (
@@ -241,7 +320,9 @@ export function ParentDashboard({ user, onLogout }) {
             <span>{currentUser.fullName}</span>
           </div>
         </div>
+        <div className="topbar-actions-spacer" />
         <button className="logout-button" type="button" onClick={onLogout}>Logout</button>
+        <NotificationBell role="parent" userId={currentUser._id} items={notificationItems} />
         <div className="avatar">{currentUser.avatar ? <img src={currentUser.avatar} alt={currentUser.fullName} /> : shortName(currentUser.fullName)}</div>
       </header>
 
@@ -733,7 +814,7 @@ function ProfileView({ user, data, preview, setPreview, isOpen, setOpen, onSubmi
             <div className="profile-modal-header">
               <div>
                 <h3>Edit Profile</h3>
-                <p>Update your personal information.</p>
+                <p>Update your personal information and password.</p>
               </div>
               <button className="icon-button" type="button" aria-label="Close" onClick={() => setOpen(false)}>x</button>
             </div>
@@ -750,6 +831,8 @@ function ProfileView({ user, data, preview, setPreview, isOpen, setOpen, onSubmi
             <input id="parentProfileAvatarInput" className="profile-file-input" name="avatar" type="file" accept="image/*" onChange={previewFile} />
             <label>Full name<input name="fullName" defaultValue={user.fullName || ""} required /></label>
             <label>Email<input name="email" type="email" defaultValue={user.email || ""} required /></label>
+            <label>New password<input name="password" type="password" placeholder="Leave blank to keep current password" autoComplete="new-password" /></label>
+            <label>Confirm password<input name="confirmPassword" type="password" placeholder="Repeat new password" autoComplete="new-password" /></label>
             <label className="profile-wide">Caption<textarea name="caption" placeholder="Write something about yourself..." defaultValue={user.caption || ""} /></label>
             <div className="profile-modal-actions">
               <button className="ghost-button" type="button" onClick={() => setOpen(false)}>Cancel</button>

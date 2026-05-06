@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "../api/client";
+import { NotificationBell } from "../components/notifications/NotificationBell";
 import { OnlineClass } from "../components/online-class/OnlineClass";
 import { dateKey as safeDate } from "../utils/date";
 import "../styles/teacher.css";
@@ -80,6 +81,81 @@ function Status({ text }) {
 
 function SuccessToast({ text, onDismiss }) {
   return null;
+}
+
+const compareScheduleTime = (left, right) =>
+  `${safeDate(left.date)} ${left.startTime || ""}`.localeCompare(`${safeDate(right.date)} ${right.startTime || ""}`);
+
+function buildTeacherNotifications(data) {
+  const today = safeDate(new Date());
+  const schedules = [...data.schedules].filter((item) => safeDate(item.date)).sort(compareScheduleTime);
+  const todaySchedules = schedules.filter((item) => safeDate(item.date) === today);
+  const upcomingSchedules = schedules.filter((item) => safeDate(item.date) > today).slice(0, 3);
+  const pendingAttendance = todaySchedules.filter(
+    (schedule) => !data.attendances.some((attendance) => sameId(getId(attendance.scheduleId), schedule._id))
+  );
+  const ungraded = data.assignments.reduce(
+    (sum, assignment) => sum + (assignment.submissions || []).filter((submission) => typeof submission.score !== "number").length,
+    0
+  );
+
+  const notifications = todaySchedules.slice(0, 3).map((item) => ({
+    id: `teacher-today-${item._id}`,
+    label: "Schedule",
+    title: `Teaching today: ${className(item.classId)}`,
+    message: `${item.startTime || "--:--"} - ${item.endTime || "--:--"} at ${item.room || "No room"}.`,
+    time: safeDate(item.date),
+  }));
+
+  upcomingSchedules.forEach((item) => {
+    notifications.push({
+      id: `teacher-upcoming-${item._id}`,
+      label: "Upcoming",
+      title: className(item.classId),
+      message: `${safeDate(item.date)} ${item.startTime || "--:--"} - ${item.endTime || "--:--"} at ${item.room || "No room"}.`,
+      time: safeDate(item.date),
+    });
+  });
+
+  if (pendingAttendance.length) {
+    notifications.push({
+      id: `teacher-attendance-${pendingAttendance.length}-${pendingAttendance[0]?._id || "none"}`,
+      label: "Attendance",
+      title: `${pendingAttendance.length} attendance checks needed`,
+      message: `Start with ${className(pendingAttendance[0].classId)} after class.`,
+    });
+  }
+
+  if (ungraded) {
+    notifications.push({
+      id: `teacher-grading-${ungraded}`,
+      label: "Grading",
+      title: `${ungraded} submissions need scores`,
+      message: "Open Assignments to review student submissions and add feedback.",
+    });
+  }
+
+  if (data.classes.length) {
+    notifications.push({
+      id: `teacher-classes-${data.classes.length}`,
+      label: "Classes",
+      title: `${data.classes.length} assigned classes`,
+      message: "Review rosters, schedules, and course details from My Classes.",
+    });
+  }
+
+  if (data.feedbacks.length) {
+    const latest = data.feedbacks[0];
+    notifications.push({
+      id: `teacher-feedback-${data.feedbacks.length}-${latest?._id || "none"}`,
+      label: "Feedback",
+      title: `${data.feedbacks.length} feedback messages`,
+      message: `${className(latest.classId)} - ${latest.comment || "New feedback is available."}`,
+      time: safeDate(latest.createdAt),
+    });
+  }
+
+  return notifications;
 }
 
 function Empty({ children }) {
@@ -718,7 +794,7 @@ function ProfileView({ user, preview, setPreview, isOpen, setOpen, onSubmit }) {
             <div className="profile-modal-header">
               <div>
                 <h3>Edit Profile</h3>
-                <p>Update your personal information.</p>
+                <p>Update your personal information and password.</p>
               </div>
               <button className="icon-button" type="button" aria-label="Close" onClick={() => setOpen(false)}>x</button>
             </div>
@@ -735,6 +811,8 @@ function ProfileView({ user, preview, setPreview, isOpen, setOpen, onSubmit }) {
             <input id="teacherProfileAvatarInput" className="profile-file-input" name="avatar" type="file" accept="image/*" onChange={previewFile} />
             <label>Full name<input name="fullName" defaultValue={user.fullName || ""} required /></label>
             <label>Email<input name="email" type="email" defaultValue={user.email || ""} required /></label>
+            <label>New password<input name="password" type="password" placeholder="Leave blank to keep current password" autoComplete="new-password" /></label>
+            <label>Confirm password<input name="confirmPassword" type="password" placeholder="Repeat new password" autoComplete="new-password" /></label>
             <label className="profile-wide">Caption<textarea name="caption" placeholder="Write something about yourself..." defaultValue={user.caption || ""} /></label>
             <div className="profile-modal-actions">
               <button className="ghost-button" type="button" onClick={() => setOpen(false)}>Cancel</button>
@@ -854,6 +932,13 @@ export function TeacherReactPage({ user, onLogout }) {
         email: String(form.get("email") || "").trim(),
         caption: String(form.get("caption") || "").trim(),
       };
+      const password = String(form.get("password") || "");
+      const confirmPassword = String(form.get("confirmPassword") || "");
+      if (password || confirmPassword) {
+        if (password.length < 6) throw new Error("Password must be at least 6 characters.");
+        if (password !== confirmPassword) throw new Error("Password confirmation does not match.");
+        payload.password = password;
+      }
       if (avatar) payload.avatar = avatar;
       const updated = await api(`/api/users/${currentUser._id}`, {
         method: "PUT",
@@ -870,13 +955,16 @@ export function TeacherReactPage({ user, onLogout }) {
     }
   };
 
+  const notificationItems = useMemo(() => buildTeacherNotifications(data), [data]);
   const [title, subtitle] = useMemo(() => viewMeta[view] || viewMeta.dashboard, [view]);
 
   return (
     <>
       <header className="teacher-topbar">
         <div className="teacher-brand"><div className="brand-mark">TH</div><div><strong>Teaching Hub</strong><span>{currentUser.fullName}</span></div></div>
+        <div className="topbar-actions-spacer" />
         <button className="logout-button" type="button" onClick={onLogout}>Logout</button>
+        <NotificationBell role="teacher" userId={currentUser._id} items={notificationItems} />
         <div className="avatar">{currentUser.avatar ? <img src={currentUser.avatar} alt={currentUser.fullName} /> : shortName(currentUser.fullName)}</div>
       </header>
       <nav className="teacher-nav" aria-label="Teacher navigation">

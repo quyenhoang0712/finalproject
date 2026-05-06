@@ -20,6 +20,7 @@ import {
   UserRound,
   Users,
   WalletCards,
+  X,
 } from "lucide-react";
 import { api, safeJson } from "../api/client";
 import { dateKey } from "../utils/date";
@@ -76,6 +77,7 @@ const initialData = {
 
 const monthTitle = (date) => date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 const getId = (value) => (typeof value === "object" && value ? value._id : value);
+const sameId = (left, right) => String(left || "") === String(right || "");
 const getName = (value, fallback = "Unknown") => {
   if (!value) return fallback;
   if (typeof value === "string") return value;
@@ -176,12 +178,25 @@ function DirectoryHero({ title, subtitle, count, icon: Icon, action }) {
 }
 
 function CreateModal({ type, data, onClose, onSubmit }) {
+  const activeEnrollments = data.enrollments
+    .filter((item) => item.status !== "cancelled")
+    .sort((a, b) => `${getName(a.studentId)} ${getName(a.classId)}`.localeCompare(`${getName(b.studentId)} ${getName(b.classId)}`));
+  const [selectedEnrollmentId, setSelectedEnrollmentId] = useState("");
+  const selectedEnrollment = activeEnrollments.find((item) => item._id === selectedEnrollmentId);
+  const existingPayments = selectedEnrollment
+    ? data.payments.filter((item) => sameId(getId(item.enrollmentId), selectedEnrollment._id))
+    : [];
+  const selectedCourseId = getId(selectedEnrollment?.classId?.courseId);
+  const selectedCourse = data.courses.find((item) => sameId(item._id, selectedCourseId));
+  const suggestedAmount = Number(selectedCourse?.price || selectedEnrollment?.classId?.courseId?.price || 0);
+
   if (!type) return null;
 
   const modalMeta = {
     user: ["Add User", "Create a teacher, student, or parent account."],
     course: ["Add Subject", "Create a new course or subject."],
     class: ["Add Class", "Create a class and assign it to a teacher."],
+    payment: ["Create Payment", "Create a tuition payment for an enrolled student."],
     announcement: ["Post Announcement", "Publish a message to a selected audience."],
   };
   const [title, subtitle] = modalMeta[type] || modalMeta.user;
@@ -276,6 +291,75 @@ function CreateModal({ type, data, onClose, onSubmit }) {
           </form>
         )}
 
+        {type === "payment" && (
+          <form className="modal-form" onSubmit={submit}>
+            <label className="modal-wide">Enrollment
+              <select
+                name="enrollmentId"
+                value={selectedEnrollmentId}
+                onChange={(event) => setSelectedEnrollmentId(event.target.value)}
+                required
+              >
+                <option value="">Select enrolled student</option>
+                {activeEnrollments.map((enrollment) => {
+                  const paymentCount = data.payments.filter((item) => sameId(getId(item.enrollmentId), enrollment._id)).length;
+                  return (
+                    <option key={enrollment._id} value={enrollment._id}>
+                      {getName(enrollment.studentId)} - {getName(enrollment.classId)}{paymentCount ? ` (${paymentCount} payment${paymentCount > 1 ? "s" : ""})` : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <div className="payment-create-context modal-wide">
+              {selectedEnrollment ? (
+                <>
+                  <span><strong>Student</strong>{getName(selectedEnrollment.studentId)}</span>
+                  <span><strong>Parent</strong>{getName(selectedEnrollment.parentId, "Not linked")}</span>
+                  <span><strong>Class</strong>{getName(selectedEnrollment.classId)}</span>
+                  <span><strong>Existing</strong>{existingPayments.length ? `${existingPayments.length} payment record${existingPayments.length > 1 ? "s" : ""}` : "No payment yet"}</span>
+                </>
+              ) : (
+                <p>Select an enrollment to create the matching tuition payment.</p>
+              )}
+            </div>
+            <label>Amount
+              <input
+                name="amount"
+                type="number"
+                min="0"
+                step="1000"
+                placeholder={suggestedAmount ? String(suggestedAmount) : "Amount"}
+                defaultValue={suggestedAmount || ""}
+                key={selectedEnrollmentId || "payment-amount"}
+                required
+              />
+            </label>
+            <label>Method
+              <select name="paymentMethod" defaultValue="bank_transfer">
+                <option value="bank_transfer">Bank transfer</option>
+                <option value="cash">Cash</option>
+                <option value="momo">Momo</option>
+                <option value="zalopay">ZaloPay</option>
+              </select>
+            </label>
+            <label>Status
+              <select name="status" defaultValue="pending">
+                <option value="pending">Pending</option>
+                <option value="paid">Paid</option>
+                <option value="failed">Failed</option>
+              </select>
+            </label>
+            <label>Paid date
+              <input name="paidAt" type="date" />
+            </label>
+            <label className="modal-wide">Note
+              <textarea name="note" placeholder="Optional payment note" />
+            </label>
+            <ModalActions onClose={onClose} />
+          </form>
+        )}
+
         {type === "announcement" && (
           <form className="modal-form" onSubmit={submit}>
             <label>Title<input name="title" placeholder="Announcement title" required /></label>
@@ -313,6 +397,7 @@ export function AdminDashboard({ user, onLogout }) {
   const [announcements, setAnnouncements] = useState(() => safeJson(localStorage.getItem("announcements"), []));
   const [modal, setModal] = useState(null);
   const [paymentPanel, setPaymentPanel] = useState(null);
+  const [scheduleEditor, setScheduleEditor] = useState(null);
   const [scheduleMonth, setScheduleMonth] = useState(new Date());
   const [profileOpen, setProfileOpen] = useState(false);
   const [profilePreview, setProfilePreview] = useState("");
@@ -384,6 +469,31 @@ export function AdminDashboard({ user, onLogout }) {
         setModal(null);
         await loadData("Class created successfully.");
       }
+      if (type === "payment") {
+        const enrollment = data.enrollments.find((item) => item._id === payload.enrollmentId);
+        const amount = Number(payload.amount || 0);
+        if (!enrollment) throw new Error("Please select an enrollment.");
+        if (!amount || amount <= 0) throw new Error("Payment amount must be greater than 0.");
+
+        await api("/api/payments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            enrollmentId: enrollment._id,
+            studentId: getId(enrollment.studentId),
+            parentId: getId(enrollment.parentId) || undefined,
+            classId: getId(enrollment.classId),
+            amount,
+            paymentMethod: payload.paymentMethod || "bank_transfer",
+            status: payload.status || "pending",
+            paidAt: payload.status === "paid" ? (payload.paidAt || new Date().toISOString()) : null,
+            note: String(payload.note || "").trim(),
+          }),
+        });
+        setModal(null);
+        setPaymentPanel("parents");
+        await loadData("Payment created successfully.");
+      }
       if (type === "announcement") {
         setAnnouncements((items) => [
           {
@@ -414,6 +524,112 @@ export function AdminDashboard({ user, onLogout }) {
       await loadData(`${labels[kind][0].toUpperCase()}${labels[kind].slice(1)} deleted.`);
     } catch (error) {
       setStatus({ text: error.message || "Could not delete.", type: "error" });
+    }
+  };
+
+  const addStudentToClass = async (classId, form) => {
+    try {
+      const payload = {
+        classId,
+        studentId: String(form.get("studentId") || ""),
+        parentId: String(form.get("parentId") || ""),
+        status: String(form.get("status") || "approved"),
+        paymentStatus: String(form.get("paymentStatus") || "unpaid"),
+      };
+
+      if (!payload.studentId) {
+        throw new Error("Please select a student.");
+      }
+      if (!payload.parentId) {
+        delete payload.parentId;
+      }
+
+      await api("/api/enrollments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      await loadData("Student added to class.");
+    } catch (error) {
+      setStatus({ text: error.message || "Could not add student to class.", type: "error" });
+      throw error;
+    }
+  };
+
+  const updateEnrollment = async (id, form) => {
+    try {
+      const payload = {
+        parentId: String(form.get("parentId") || "") || null,
+        status: String(form.get("status") || "approved"),
+        paymentStatus: String(form.get("paymentStatus") || "unpaid"),
+      };
+
+      await api(`/api/enrollments/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      await loadData("Enrollment updated.");
+    } catch (error) {
+      setStatus({ text: error.message || "Could not update enrollment.", type: "error" });
+      throw error;
+    }
+  };
+
+  const removeEnrollment = async (enrollment) => {
+    const paymentCount = data.payments.filter((item) => sameId(getId(item.enrollmentId), enrollment._id)).length;
+    const message = paymentCount
+      ? `Remove ${getName(enrollment.studentId)} from this class?\n\nThis enrollment has ${paymentCount} payment record${paymentCount > 1 ? "s" : ""}. Payment records will stay in the payment list.`
+      : `Remove ${getName(enrollment.studentId)} from this class?`;
+    if (!window.confirm(message)) return;
+
+    try {
+      await api(`/api/enrollments/${enrollment._id}`, { method: "DELETE" });
+      await loadData("Student removed from class.");
+    } catch (error) {
+      setStatus({ text: error.message || "Could not remove student from class.", type: "error" });
+    }
+  };
+
+  const saveSchedule = async (form, schedule = null) => {
+    try {
+      const payload = {
+        classId: String(form.get("classId") || ""),
+        date: String(form.get("date") || ""),
+        startTime: String(form.get("startTime") || ""),
+        endTime: String(form.get("endTime") || ""),
+        room: String(form.get("room") || "").trim(),
+        status: String(form.get("status") || "scheduled"),
+        note: String(form.get("note") || "").trim(),
+      };
+
+      if (!payload.classId || !payload.date || !payload.startTime || !payload.endTime) {
+        throw new Error("Class, date, start time, and end time are required.");
+      }
+      if (payload.startTime >= payload.endTime) {
+        throw new Error("End time must be after start time.");
+      }
+
+      await api(schedule ? `/api/schedules/${schedule._id}` : "/api/schedules", {
+        method: schedule ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      setScheduleEditor(null);
+      await loadData(schedule ? "Schedule updated successfully." : "Schedule created successfully.");
+    } catch (error) {
+      setStatus({ text: error.message || "Could not save schedule.", type: "error" });
+      throw error;
+    }
+  };
+
+  const deleteSchedule = async (id) => {
+    if (!window.confirm("Delete this schedule?")) return;
+    try {
+      await api(`/api/schedules/${id}`, { method: "DELETE" });
+      await loadData("Schedule deleted.");
+    } catch (error) {
+      setStatus({ text: error.message || "Could not delete schedule.", type: "error" });
     }
   };
 
@@ -468,6 +684,13 @@ export function AdminDashboard({ user, onLogout }) {
         email: String(form.get("email") || "").trim(),
         caption: String(form.get("caption") || "").trim(),
       };
+      const password = String(form.get("password") || "");
+      const confirmPassword = String(form.get("confirmPassword") || "");
+      if (password || confirmPassword) {
+        if (password.length < 6) throw new Error("Password must be at least 6 characters.");
+        if (password !== confirmPassword) throw new Error("Password confirmation does not match.");
+        payload.password = password;
+      }
       if (avatar) payload.avatar = avatar;
       const updated = await api(`/api/users/${currentUser._id}`, {
         method: "PUT",
@@ -545,6 +768,7 @@ export function AdminDashboard({ user, onLogout }) {
                 setPaymentPanel={setPaymentPanel}
                 onConfirmPayment={confirmPayment}
                 onPayTeacher={markTeacherPaid}
+                onOpenModal={setModal}
               />
             )}
             {view === "users" && <UsersOverview data={data} onOpenModal={setModal} onDelete={(id) => deleteRecord("user", id)} />}
@@ -552,8 +776,26 @@ export function AdminDashboard({ user, onLogout }) {
             {view === "students" && <RoleDirectory view="students" role="student" data={data} onOpenModal={setModal} onDelete={(id) => deleteRecord("user", id)} />}
             {view === "parents" && <RoleDirectory view="parents" role="parent" data={data} onOpenModal={setModal} onDelete={(id) => deleteRecord("user", id)} />}
             {view === "subjects" && <SubjectsView data={data} onOpenModal={setModal} onDelete={(id) => deleteRecord("course", id)} />}
-            {view === "classes" && <ClassesView data={data} onOpenModal={setModal} onDelete={(id) => deleteRecord("class", id)} />}
-            {view === "schedules" && <SchedulesView data={data} scheduleMonth={scheduleMonth} setScheduleMonth={setScheduleMonth} />}
+            {view === "classes" && (
+              <ClassesView
+                data={data}
+                onOpenModal={setModal}
+                onDelete={(id) => deleteRecord("class", id)}
+                onAddStudent={addStudentToClass}
+                onUpdateEnrollment={updateEnrollment}
+                onRemoveEnrollment={removeEnrollment}
+              />
+            )}
+            {view === "schedules" && (
+              <SchedulesView
+                data={data}
+                scheduleMonth={scheduleMonth}
+                setScheduleMonth={setScheduleMonth}
+                onCreateSchedule={(date = "") => setScheduleEditor({ schedule: null, date })}
+                onEditSchedule={(schedule) => setScheduleEditor({ schedule, date: "" })}
+                onDeleteSchedule={deleteSchedule}
+              />
+            )}
             {view === "announcements" && <AnnouncementsView rows={announcements} onOpenModal={setModal} onDelete={(id) => setAnnouncements((items) => items.filter((item) => item.id !== id))} />}
             {view === "reports" && <ReportsView data={data} payrollRows={payrollRows} />}
             {view === "profile" && (
@@ -571,6 +813,12 @@ export function AdminDashboard({ user, onLogout }) {
       </main>
 
       <CreateModal type={modal} data={data} onClose={() => setModal(null)} onSubmit={submitCreate} />
+      <ScheduleEditorModal
+        data={data}
+        editor={scheduleEditor}
+        onClose={() => setScheduleEditor(null)}
+        onSubmit={saveSchedule}
+      />
     </>
   );
 }
@@ -708,7 +956,7 @@ function Metric({ title, value, note, color, code }) {
   );
 }
 
-function PaymentTasksView({ data, payrollRows, paymentPanel, setPaymentPanel, onConfirmPayment, onPayTeacher }) {
+function PaymentTasksView({ data, payrollRows, paymentPanel, setPaymentPanel, onConfirmPayment, onPayTeacher, onOpenModal }) {
   const pendingBankTransfers = data.payments.filter(needsConfirmation);
   const paidPayments = data.payments.filter((item) => item.status === "paid").slice(0, 12);
   const unpaidPayroll = payrollRows.filter((item) => item.status !== "paid");
@@ -721,9 +969,14 @@ function PaymentTasksView({ data, payrollRows, paymentPanel, setPaymentPanel, on
           <h2>Money Tasks</h2>
           <p>Handle incoming parent transfers and outgoing teacher payroll from one clean board.</p>
         </div>
-        <div className="payment-task-total">
-          <strong>{pendingBankTransfers.length + unpaidPayroll.length}</strong>
-          <span>open tasks</span>
+        <div className="payment-task-actions">
+          <button className="payment-create-button" type="button" onClick={() => onOpenModal("payment")}>
+            Create Payment
+          </button>
+          <div className="payment-task-total">
+            <strong>{pendingBankTransfers.length + unpaidPayroll.length}</strong>
+            <span>open tasks</span>
+          </div>
         </div>
       </section>
 
@@ -943,9 +1196,11 @@ function SubjectsView({ data, onOpenModal, onDelete }) {
   );
 }
 
-function ClassesView({ data, onOpenModal, onDelete }) {
+function ClassesView({ data, onOpenModal, onDelete, onAddStudent, onUpdateEnrollment, onRemoveEnrollment }) {
   const [query, setQuery] = useState("");
+  const [activeClassId, setActiveClassId] = useState("");
   const rows = data.classes.filter((item) => `${item.className} ${getName(item.courseId)} ${getName(item.teacherId)}`.toLowerCase().includes(query.toLowerCase()));
+  const activeClass = data.classes.find((item) => item._id === activeClassId);
 
   return (
     <>
@@ -973,19 +1228,296 @@ function ClassesView({ data, onOpenModal, onDelete }) {
                 <div><strong>{current}/{capacity}</strong><span>{percent}% full</span></div>
                 <div className="thin-progress"><span style={{ width: `${percent}%` }} /></div>
               </div>
-              <button className="danger-button" type="button" onClick={() => onDelete(classItem._id)}>
-                <Trash2 size={15} />
-                Delete
-              </button>
+              <div className="class-card-actions">
+                <button className="small-button" type="button" onClick={() => setActiveClassId(classItem._id)}>
+                  Manage Students
+                </button>
+                <button className="danger-button" type="button" onClick={() => onDelete(classItem._id)}>
+                  <Trash2 size={15} />
+                  Delete
+                </button>
+              </div>
             </article>
           );
         }) : <Empty>No classes yet.</Empty>}
       </section>
+      {activeClass && (
+        <ClassDetailModal
+          classItem={activeClass}
+          data={data}
+          onClose={() => setActiveClassId("")}
+          onAddStudent={onAddStudent}
+          onUpdateEnrollment={onUpdateEnrollment}
+          onRemoveEnrollment={onRemoveEnrollment}
+        />
+      )}
     </>
   );
 }
 
-function SchedulesView({ data, scheduleMonth, setScheduleMonth }) {
+function ClassDetailModal({ classItem, data, onClose, onAddStudent, onUpdateEnrollment, onRemoveEnrollment }) {
+  const [adding, setAdding] = useState(false);
+  const [savingEnrollment, setSavingEnrollment] = useState(false);
+  const [editingEnrollment, setEditingEnrollment] = useState(null);
+  const enrollments = data.enrollments.filter((item) => sameId(getId(item.classId), classItem._id));
+  const enrolledStudentIds = new Set(enrollments.map((item) => String(getId(item.studentId))).filter(Boolean));
+  const availableStudents = data.users
+    .filter((item) => item.role === "student" && !enrolledStudentIds.has(String(item._id)))
+    .sort((a, b) => a.fullName.localeCompare(b.fullName));
+  const parents = data.users.filter((item) => item.role === "parent").sort((a, b) => a.fullName.localeCompare(b.fullName));
+  const capacity = Number(classItem.capacity || 0);
+  const activeEnrollmentCount = enrollments.filter((item) => item.status !== "cancelled").length;
+  const current = Math.max(Number(classItem.currentStudents || 0), activeEnrollmentCount);
+  const isFull = capacity > 0 && current >= capacity;
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setAdding(true);
+    try {
+      await onAddStudent(classItem._id, new FormData(event.currentTarget));
+      event.currentTarget.reset();
+    } catch (error) {
+      // The page status area already shows the actionable error.
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const submitEnrollmentEdit = async (event) => {
+    event.preventDefault();
+    if (!editingEnrollment) return;
+    setSavingEnrollment(true);
+    try {
+      await onUpdateEnrollment(editingEnrollment._id, new FormData(event.currentTarget));
+      setEditingEnrollment(null);
+    } catch (error) {
+      // The page status area already shows the actionable error.
+    } finally {
+      setSavingEnrollment(false);
+    }
+  };
+
+  return createPortal((
+    <div className="modal-overlay active class-detail-overlay" aria-hidden="false" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="modal-card class-detail-card" role="dialog" aria-modal="true" aria-labelledby="classDetailTitle">
+        <header className="modal-header class-detail-header">
+          <div>
+            <span>Class details</span>
+            <h3 id="classDetailTitle">{classItem.className}</h3>
+            <p>{getName(classItem.courseId)} - {getName(classItem.teacherId)}</p>
+          </div>
+          <button className="icon-button" type="button" aria-label="Close class detail" onClick={onClose}><X size={18} /></button>
+        </header>
+
+        <div className="class-detail-body">
+          <section className="class-detail-summary">
+            <div><strong>Teacher</strong><span>{getName(classItem.teacherId)}</span></div>
+            <div><strong>Subject</strong><span>{getName(classItem.courseId)}</span></div>
+            <div><strong>Schedule</strong><span>{classItem.schedule || "No schedule"}</span></div>
+            <div><strong>Room</strong><span>{classItem.room || "No room"}</span></div>
+            <div><strong>Dates</strong><span>{dateKey(classItem.startDate)} - {dateKey(classItem.endDate)}</span></div>
+            <div><strong>Capacity</strong><span>{current}/{capacity || "N/A"} students</span></div>
+          </section>
+
+          <section className="class-detail-main">
+            <article className="class-roster-panel">
+              <header>
+                <div>
+                  <h4>Students</h4>
+                  <p>{enrollments.length} enrolled in this class.</p>
+                </div>
+                <Badge>{classItem.status || "upcoming"}</Badge>
+              </header>
+              <div className="class-roster-list">
+                {enrollments.length ? enrollments.map((enrollment) => (
+                  <div className="class-roster-row" key={enrollment._id}>
+                    <span className="class-roster-avatar">{shortName(getName(enrollment.studentId, "ST"))}</span>
+                    <div>
+                      <strong>{getName(enrollment.studentId)}</strong>
+                      <span>{enrollment.studentId?.email || "No email"}</span>
+                      <small>Parent: {getName(enrollment.parentId, "Not linked")}</small>
+                    </div>
+                    <div className="class-roster-controls">
+                      <div className="class-roster-badges">
+                        <Badge>{enrollment.status || "pending"}</Badge>
+                        <Badge>{enrollment.paymentStatus || "unpaid"}</Badge>
+                      </div>
+                      <div className="class-roster-actions">
+                        <button type="button" onClick={() => setEditingEnrollment(enrollment)}>Edit</button>
+                        <button type="button" className="danger" onClick={() => onRemoveEnrollment(enrollment)}>Remove</button>
+                      </div>
+                    </div>
+                  </div>
+                )) : <Empty>No students in this class yet.</Empty>}
+              </div>
+            </article>
+
+            {editingEnrollment ? (
+              <form className="class-add-student-form class-edit-enrollment-form" onSubmit={submitEnrollmentEdit} key={editingEnrollment._id}>
+                <div>
+                  <h4>Edit Enrollment</h4>
+                  <p>{getName(editingEnrollment.studentId)} in {classItem.className}.</p>
+                </div>
+                <label>
+                  Parent
+                  <select name="parentId" defaultValue={getId(editingEnrollment.parentId) || ""} disabled={savingEnrollment}>
+                    <option value="">No parent linked</option>
+                    {parents.map((parent) => <option key={parent._id} value={parent._id}>{parent.fullName} - {parent.email}</option>)}
+                  </select>
+                </label>
+                <div className="class-add-student-row">
+                  <label>
+                    Enrollment status
+                    <select name="status" defaultValue={editingEnrollment.status || "approved"} disabled={savingEnrollment}>
+                      <option value="approved">Approved</option>
+                      <option value="pending">Pending</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </label>
+                  <label>
+                    Payment status
+                    <select name="paymentStatus" defaultValue={editingEnrollment.paymentStatus || "unpaid"} disabled={savingEnrollment}>
+                      <option value="unpaid">Unpaid</option>
+                      <option value="paid">Paid</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="class-edit-enrollment-actions">
+                  <button className="ghost-button" type="button" onClick={() => setEditingEnrollment(null)} disabled={savingEnrollment}>Cancel</button>
+                  <button className="small-button" type="submit" disabled={savingEnrollment}>{savingEnrollment ? "Saving..." : "Save Changes"}</button>
+                </div>
+              </form>
+            ) : (
+            <form className="class-add-student-form" onSubmit={submit}>
+              <div>
+                <h4>Add Student</h4>
+                <p>Select a student account and optionally link a parent account.</p>
+              </div>
+              <label>
+                Student
+                <select name="studentId" required disabled={adding || isFull || !availableStudents.length}>
+                  <option value="">{isFull ? "Class is full" : "Select student"}</option>
+                  {availableStudents.map((student) => <option key={student._id} value={student._id}>{student.fullName} - {student.email}</option>)}
+                </select>
+              </label>
+              <label>
+                Parent
+                <select name="parentId" disabled={adding}>
+                  <option value="">No parent linked</option>
+                  {parents.map((parent) => <option key={parent._id} value={parent._id}>{parent.fullName} - {parent.email}</option>)}
+                </select>
+              </label>
+              <div className="class-add-student-row">
+                <label>
+                  Enrollment status
+                  <select name="status" defaultValue="approved" disabled={adding}>
+                    <option value="approved">Approved</option>
+                    <option value="pending">Pending</option>
+                  </select>
+                </label>
+                <label>
+                  Payment status
+                  <select name="paymentStatus" defaultValue="unpaid" disabled={adding}>
+                    <option value="unpaid">Unpaid</option>
+                    <option value="paid">Paid</option>
+                  </select>
+                </label>
+              </div>
+              {!availableStudents.length && !isFull && <p className="class-add-note">All student accounts are already enrolled in this class.</p>}
+              <button className="small-button" type="submit" disabled={adding || isFull || !availableStudents.length}>
+                {adding ? "Adding..." : "Add Student"}
+              </button>
+            </form>
+            )}
+          </section>
+        </div>
+      </section>
+    </div>
+  ), document.body);
+}
+
+function ScheduleEditorModal({ data, editor, onClose, onSubmit }) {
+  const [saving, setSaving] = useState(false);
+  if (!editor) return null;
+
+  const schedule = editor.schedule;
+  const classes = [...data.classes].sort((a, b) => String(a.className || "").localeCompare(String(b.className || "")));
+  const selectedClassId = getId(schedule?.classId) || "";
+  const initialDate = editor.date || dateKey(schedule?.date) || "";
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await onSubmit(new FormData(event.currentTarget), schedule);
+    } catch (error) {
+      // The admin status area already shows the actionable error.
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return createPortal((
+    <div className="modal-overlay active" aria-hidden="false" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="modal-card schedule-editor-card" role="dialog" aria-modal="true" aria-labelledby="scheduleEditorTitle">
+        <div className="modal-header">
+          <div>
+            <h3 id="scheduleEditorTitle">{schedule ? "Edit Schedule" : "Add Schedule"}</h3>
+            <p>{schedule ? "Update this teaching session." : "Create a teaching session for a class."}</p>
+          </div>
+          <button className="icon-button" type="button" aria-label="Close schedule editor" onClick={onClose}>x</button>
+        </div>
+        <form className="modal-form schedule-editor-form" onSubmit={submit}>
+          <label className="modal-wide">
+            Class
+            <select name="classId" defaultValue={selectedClassId} required disabled={saving}>
+              <option value="">Select class</option>
+              {classes.map((classItem) => (
+                <option key={classItem._id} value={classItem._id}>
+                  {classItem.className} - {getName(classItem.courseId)} - {getName(classItem.teacherId)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Date
+            <input name="date" type="date" defaultValue={initialDate} required disabled={saving} />
+          </label>
+          <label>
+            Start time
+            <input name="startTime" type="time" defaultValue={schedule?.startTime || ""} required disabled={saving} />
+          </label>
+          <label>
+            End time
+            <input name="endTime" type="time" defaultValue={schedule?.endTime || ""} required disabled={saving} />
+          </label>
+          <label>
+            Room
+            <input name="room" placeholder="Room or online link" defaultValue={schedule?.room || ""} disabled={saving} />
+          </label>
+          <label>
+            Status
+            <select name="status" defaultValue={schedule?.status || "scheduled"} disabled={saving}>
+              <option value="scheduled">Scheduled</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label className="modal-wide">
+            Note
+            <textarea name="note" placeholder="Optional schedule note" defaultValue={schedule?.note || ""} disabled={saving} />
+          </label>
+          <div className="modal-actions">
+            <button className="ghost-button" type="button" onClick={onClose} disabled={saving}>Cancel</button>
+            <button className="small-button" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Schedule"}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  ), document.body);
+}
+
+function SchedulesView({ data, scheduleMonth, setScheduleMonth, onCreateSchedule, onEditSchedule, onDeleteSchedule }) {
   const now = new Date();
   const todayKey = dateKey(now);
   const viewYear = scheduleMonth.getFullYear();
@@ -1019,6 +1551,7 @@ function SchedulesView({ data, scheduleMonth, setScheduleMonth }) {
         <div className="calendar-toolbar">
           <div><span>Academic calendar</span><h2>{monthTitle(scheduleMonth)}</h2></div>
           <div className="calendar-actions">
+            <button className="small-button" type="button" onClick={() => onCreateSchedule(dateKey(new Date()))}>Add Session</button>
             <button className="icon-button" type="button" aria-label="Previous month" onClick={() => setScheduleMonth(new Date(viewYear, viewMonth - 1, 1))}><ChevronLeft /></button>
             <button className="small-button" type="button" onClick={() => setScheduleMonth(new Date())}>Today</button>
             <button className="icon-button" type="button" aria-label="Next month" onClick={() => setScheduleMonth(new Date(viewYear, viewMonth + 1, 1))}><ChevronRight /></button>
@@ -1035,7 +1568,10 @@ function SchedulesView({ data, scheduleMonth, setScheduleMonth }) {
               <div className={`calendar-day ${key === todayKey ? "today" : ""}`} key={key}>
                 <div className="calendar-day-top">
                   <span>{date.toLocaleDateString("en-US", { weekday: "short" })}</span>
-                  <strong>{date.getDate()}</strong>
+                  <div>
+                    <strong>{date.getDate()}</strong>
+                    <button className="calendar-day-add" type="button" aria-label={`Add schedule on ${key}`} onClick={() => onCreateSchedule(key)}>+</button>
+                  </div>
                 </div>
                 <div className="calendar-events">
                   {daySchedules.slice(0, 4).map((item) => (
@@ -1043,6 +1579,10 @@ function SchedulesView({ data, scheduleMonth, setScheduleMonth }) {
                       <strong>{getName(item.classId)}</strong>
                       <span>{item.startTime || "--:--"} - {item.endTime || "--:--"}</span>
                       <small>{item.room || "No room"}{item.classId?.teacherId ? ` - ${getName(item.classId.teacherId)}` : ""}</small>
+                      <div className="calendar-event-actions">
+                        <button type="button" onClick={() => onEditSchedule(item)}>Edit</button>
+                        <button type="button" className="danger" onClick={() => onDeleteSchedule(item._id)}>Delete</button>
+                      </div>
                     </article>
                   ))}
                   {daySchedules.length > 4 && <span className="calendar-more">+{daySchedules.length - 4} more</span>}
@@ -1059,7 +1599,11 @@ function SchedulesView({ data, scheduleMonth, setScheduleMonth }) {
             {todaySchedules.length ? todaySchedules.map((item) => (
               <div className="list-row" key={item._id}>
                 <div><strong>{getName(item.classId)}</strong><span>{item.startTime || ""} - {item.endTime || ""} - {item.room || "No room"}</span></div>
-                <Badge>{item.status || "scheduled"}</Badge>
+                <div className="schedule-row-actions">
+                  <Badge>{item.status || "scheduled"}</Badge>
+                  <button type="button" onClick={() => onEditSchedule(item)}>Edit</button>
+                  <button type="button" className="danger" onClick={() => onDeleteSchedule(item._id)}>Delete</button>
+                </div>
               </div>
             )) : <Empty>No classes scheduled today.</Empty>}
           </div>
@@ -1070,7 +1614,11 @@ function SchedulesView({ data, scheduleMonth, setScheduleMonth }) {
             {upcomingSchedules.length ? upcomingSchedules.map((item) => (
               <div className="list-row" key={item._id}>
                 <div><strong>{getName(item.classId)}</strong><span>{dateKey(item.date)} - {item.startTime || ""}</span></div>
-                <Badge>{item.status || "scheduled"}</Badge>
+                <div className="schedule-row-actions">
+                  <Badge>{item.status || "scheduled"}</Badge>
+                  <button type="button" onClick={() => onEditSchedule(item)}>Edit</button>
+                  <button type="button" className="danger" onClick={() => onDeleteSchedule(item._id)}>Delete</button>
+                </div>
               </div>
             )) : <Empty>No upcoming sessions.</Empty>}
           </div>
@@ -1251,7 +1799,7 @@ function ProfileView({ user, preview, setPreview, isOpen, setOpen, onSubmit }) {
             <div className="profile-modal-header">
               <div>
                 <h3>Edit Profile</h3>
-                <p>Update your personal information.</p>
+                <p>Update your personal information and password.</p>
               </div>
               <button className="icon-button" type="button" aria-label="Close" onClick={() => setOpen(false)}>x</button>
             </div>
@@ -1268,6 +1816,8 @@ function ProfileView({ user, preview, setPreview, isOpen, setOpen, onSubmit }) {
             <input id="profileAvatarInput" className="profile-file-input" name="avatar" type="file" accept="image/*" onChange={previewFile} />
             <label>Full name<input name="fullName" defaultValue={user.fullName || ""} required /></label>
             <label>Email<input name="email" type="email" defaultValue={user.email || ""} required /></label>
+            <label>New password<input name="password" type="password" placeholder="Leave blank to keep current password" autoComplete="new-password" /></label>
+            <label>Confirm password<input name="confirmPassword" type="password" placeholder="Repeat new password" autoComplete="new-password" /></label>
             <label className="profile-wide">Caption<textarea name="caption" placeholder="Write something about yourself..." defaultValue={user.caption || ""} /></label>
             <div className="profile-modal-actions">
               <button className="ghost-button" type="button" onClick={() => setOpen(false)}>Cancel</button>
